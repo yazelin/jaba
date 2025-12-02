@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jiaba - 管理員</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <a href="/" class="back-link">← 返回看板</a>
+
+  <!-- 密碼驗證 -->
+  <div class="password-container" id="password-section">
+    <div class="password-box">
+      <h2>🔐 管理員登入</h2>
+      <input type="password" id="password-input" placeholder="請輸入密碼" autofocus onkeypress="handlePasswordKeyPress(event)">
+      <br>
+      <button class="btn btn-primary" onclick="verifyPassword()">登入</button>
+      <p class="error-msg" id="error-msg" style="display: none;"></p>
+    </div>
+  </div>
+
+  <!-- 管理介面 -->
+  <div class="container" id="manager-section" style="display: none;">
+    <div class="chat-container">
+      <div class="chat-header">
+        <h1>⚙️ jiaba 管理模式</h1>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <!-- 訊息會動態加入這裡 -->
+      </div>
+
+      <div class="chat-input" id="chat-input">
+        <input type="text" id="message-input" placeholder="輸入管理指令..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">發送</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const username = '管理員';
+
+    // 處理密碼 Enter 鍵
+    function handlePasswordKeyPress(event) {
+      if (event.key === 'Enter') {
+        verifyPassword();
+      }
+    }
+
+    // 驗證密碼
+    async function verifyPassword() {
+      const password = document.getElementById('password-input').value;
+      const errorMsg = document.getElementById('error-msg');
+
+      try {
+        const res = await fetch('/api/verify-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          // 隱藏密碼輸入，顯示管理介面
+          document.getElementById('password-section').style.display = 'none';
+          document.getElementById('manager-section').style.display = 'block';
+
+          // 顯示歡迎訊息
+          addMessage('assistant', `歡迎，管理員！\n\n你可以：\n• 設定今日店家（例：今天吃 sample-store）\n• 新增店家（例：新增一家店叫「美味便當」）\n• 編輯菜單（例：幫 sample-store 新增一道菜）\n• 查看今日訂單\n• 查看付款狀態\n• 標記已付款（例：小明已付款）`);
+
+          document.getElementById('message-input').focus();
+        } else {
+          errorMsg.textContent = '密碼錯誤';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = '驗證失敗，請稍後再試';
+        errorMsg.style.display = 'block';
+        console.error(err);
+      }
+    }
+
+    // 處理 Enter 鍵
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    // 發送訊息
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      // 顯示使用者訊息
+      addMessage('user', message);
+      input.value = '';
+
+      // 顯示載入中
+      const loadingId = addMessage('assistant', '處理中...');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username,
+            message: message,
+            is_manager: true
+          })
+        });
+
+        const data = await res.json();
+
+        // 移除載入訊息
+        document.getElementById(loadingId).remove();
+
+        // 顯示 AI 回應
+        addMessage('assistant', data.message || '收到指令。');
+
+        // 如果有執行動作，顯示結果
+        if (data.action_result) {
+          if (data.action_result.success) {
+            let resultMsg = '✅ 操作成功！';
+            if (data.action_result.event === 'store_changed') {
+              resultMsg = `✅ 已設定今日店家：${data.action_result.today?.store_name}`;
+            }
+            addMessage('assistant', resultMsg);
+          } else if (data.action_result.error) {
+            addMessage('assistant', `❌ 操作失敗：${data.action_result.error}`);
+          }
+        }
+
+      } catch (err) {
+        document.getElementById(loadingId).remove();
+        addMessage('assistant', '抱歉，發生錯誤了，請稍後再試。');
+        console.error(err);
+      }
+    }
+
+    // 添加訊息到對話區域
+    function addMessage(role, content) {
+      const messagesEl = document.getElementById('chat-messages');
+      const id = 'msg-' + Date.now();
+
+      const msgEl = document.createElement('div');
+      msgEl.id = id;
+      msgEl.className = `message ${role}`;
+      msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      return id;
+    }
+
+    // 監聽事件
+    socket.on('order_created', (data) => {
+      showNotification(`${data.username} 訂了便當！`);
+    });
+
+    socket.on('order_cancelled', (data) => {
+      showNotification(`${data.username} 取消了訂單`);
+    });
+
+    function showNotification(message) {
+      const notif = document.createElement('div');
+      notif.className = 'notification';
+      notif.textContent = message;
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

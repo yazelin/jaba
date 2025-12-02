@@ -8,5 +8,6 @@ dependencies = [
     "anthropic>=0.75.0",
     "fastapi>=0.123.4",
     "python-multipart>=0.0.20",
+    "python-socketio>=5.15.0",
     "uvicorn[standard]>=0.38.0",
 ]

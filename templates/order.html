@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jiaba - 訂餐</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <a href="/" class="back-link">← 返回看板</a>
+
+  <div class="container">
+    <div class="chat-container">
+      <div class="chat-header">
+        <h1>🍱 jiaba 訂餐助手</h1>
+      </div>
+
+      <!-- 名稱輸入 -->
+      <div class="name-input-container" id="name-input-section">
+        <h2>請輸入你的名字</h2>
+        <input type="text" id="username-input" placeholder="你的名字" autofocus>
+        <button class="btn btn-primary" onclick="startChat()">開始訂餐</button>
+      </div>
+
+      <!-- 對話區域 -->
+      <div class="chat-messages" id="chat-messages" style="display: none;">
+        <!-- 訊息會動態加入這裡 -->
+      </div>
+
+      <div class="chat-input" id="chat-input" style="display: none;">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">發送</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let username = '';
+
+    // 檢查 localStorage 是否有儲存的名字
+    const savedName = localStorage.getItem('jiaba_username');
+    if (savedName) {
+      document.getElementById('username-input').value = savedName;
+    }
+
+    // 開始對話
+    function startChat() {
+      const input = document.getElementById('username-input');
+      username = input.value.trim();
+
+      if (!username) {
+        alert('請輸入名字');
+        return;
+      }
+
+      // 儲存名字到 localStorage
+      localStorage.setItem('jiaba_username', username);
+
+      // 隱藏名稱輸入，顯示對話區域
+      document.getElementById('name-input-section').style.display = 'none';
+      document.getElementById('chat-messages').style.display = 'block';
+      document.getElementById('chat-input').style.display = 'flex';
+
+      // 顯示歡迎訊息
+      addMessage('assistant', `嗨 ${username}！我是 jiaba，今天想吃什麼呢？\n\n你可以問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n• 查詢我的訂單`);
+
+      document.getElementById('message-input').focus();
+    }
+
+    // 處理 Enter 鍵
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    // 發送訊息
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      // 顯示使用者訊息
+      addMessage('user', message);
+      input.value = '';
+
+      // 顯示載入中
+      const loadingId = addMessage('assistant', '思考中...');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username,
+            message: message,
+            is_manager: false
+          })
+        });
+
+        const data = await res.json();
+
+        // 移除載入訊息
+        document.getElementById(loadingId).remove();
+
+        // 顯示 AI 回應
+        addMessage('assistant', data.message || '抱歉，我沒有理解你的意思。');
+
+        // 如果有執行動作，顯示結果
+        if (data.action_result) {
+          if (data.action_result.success) {
+            if (data.action_result.event === 'order_created') {
+              addMessage('assistant', '✅ 訂單已建立！你可以在看板上看到你的訂單。');
+            } else if (data.action_result.event === 'order_cancelled') {
+              addMessage('assistant', '✅ 訂單已取消。');
+            }
+          } else if (data.action_result.error) {
+            addMessage('assistant', `❌ 操作失敗：${data.action_result.error}`);
+          }
+        }
+
+      } catch (err) {
+        document.getElementById(loadingId).remove();
+        addMessage('assistant', '抱歉，發生錯誤了，請稍後再試。');
+        console.error(err);
+      }
+    }
+
+    // 添加訊息到對話區域
+    function addMessage(role, content) {
+      const messagesEl = document.getElementById('chat-messages');
+      const id = 'msg-' + Date.now();
+
+      const msgEl = document.createElement('div');
+      msgEl.id = id;
+      msgEl.className = `message ${role}`;
+      msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      return id;
+    }
+
+    // 監聽訂單事件
+    socket.on('order_created', (data) => {
+      if (data.username !== username) {
+        showNotification(`${data.username} 也訂了便當！`);
+      }
+    });
+
+    function showNotification(message) {
+      const notif = document.createElement('div');
+      notif.className = 'notification';
+      notif.textContent = message;
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 3000);
+    }
+
+    // 按 Enter 開始
+    document.getElementById('username-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') startChat();
+    });
+  </script>
+</body>
+</html>

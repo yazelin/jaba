@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jiaba - 今日訂餐看板</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="board">
+      <div class="board-header">
+        <h1 class="board-title">🍱 jiaba 訂餐看板</h1>
+        <p class="board-subtitle" id="today-date"></p>
+      </div>
+
+      <div class="store-name" id="store-name">
+        <span class="no-store">尚未設定今日店家</span>
+      </div>
+
+      <div class="orders-section">
+        <h2 class="section-title">📋 訂單列表</h2>
+        <div class="orders-list" id="orders-list">
+          <div class="empty-state">
+            <div class="empty-state-icon">🍽️</div>
+            <p>還沒有人訂餐</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="orders-section">
+        <h2 class="section-title">📊 品項統計</h2>
+        <div class="item-summary" id="item-summary">
+          <div class="empty-state">
+            <p>尚無統計資料</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grand-total" id="grand-total">
+        <div class="grand-total-label">總金額</div>
+        <div class="grand-total-amount">$0</div>
+      </div>
+
+      <div class="buttons">
+        <a href="/order" class="btn btn-primary">🍱 我要訂便當</a>
+        <a href="/manager" class="btn btn-secondary">⚙️ 管理員</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Socket.IO 連線
+    const socket = io();
+
+    // 顯示今日日期
+    const today = new Date();
+    document.getElementById('today-date').textContent =
+      `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()} ${['日','一','二','三','四','五','六'][today.getDay()]}`;
+
+    // 載入資料
+    async function loadData() {
+      try {
+        const res = await fetch('/api/today');
+        const data = await res.json();
+        updateBoard(data);
+      } catch (err) {
+        console.error('載入失敗:', err);
+      }
+    }
+
+    // 更新看板
+    function updateBoard(data) {
+      const { today: todayInfo, summary } = data;
+
+      // 更新店家名稱
+      const storeNameEl = document.getElementById('store-name');
+      if (todayInfo && todayInfo.store_name) {
+        storeNameEl.innerHTML = `🏪 ${todayInfo.store_name}`;
+      } else {
+        storeNameEl.innerHTML = '<span class="no-store">尚未設定今日店家</span>';
+      }
+
+      // 更新訂單列表
+      const ordersListEl = document.getElementById('orders-list');
+      if (summary && summary.orders && summary.orders.length > 0) {
+        ordersListEl.innerHTML = summary.orders.map(order => `
+          <div class="order-card">
+            <div>
+              <div class="order-user">${order.username}</div>
+              <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+            </div>
+            <div class="order-total">$${order.total}</div>
+          </div>
+        `).join('');
+      } else {
+        ordersListEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🍽️</div>
+            <p>還沒有人訂餐</p>
+          </div>
+        `;
+      }
+
+      // 更新品項統計
+      const itemSummaryEl = document.getElementById('item-summary');
+      if (summary && summary.item_summary && summary.item_summary.length > 0) {
+        itemSummaryEl.innerHTML = summary.item_summary.map(item =>
+          `<span class="item-badge">${item.name} x${item.quantity}</span>`
+        ).join('');
+      } else {
+        itemSummaryEl.innerHTML = '<div class="empty-state"><p>尚無統計資料</p></div>';
+      }
+
+      // 更新總金額
+      const grandTotal = summary ? summary.grand_total || 0 : 0;
+      document.querySelector('.grand-total-amount').textContent = `$${grandTotal}`;
+    }
+
+    // 顯示通知
+    function showNotification(message) {
+      const notif = document.createElement('div');
+      notif.className = 'notification';
+      notif.textContent = message;
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 3000);
+    }
+
+    // 監聽即時事件
+    socket.on('order_created', (data) => {
+      showNotification(`${data.username} 訂了便當！`);
+      loadData();
+    });
+
+    socket.on('order_updated', (data) => {
+      showNotification(`${data.username} 修改了訂單`);
+      loadData();
+    });
+
+    socket.on('order_cancelled', (data) => {
+      showNotification(`${data.username} 取消了訂單`);
+      loadData();
+    });
+
+    socket.on('store_changed', (data) => {
+      showNotification('今日店家已更新！');
+      loadData();
+    });
+
+    // 初始載入
+    loadData();
+
+    // 每 30 秒自動刷新
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>

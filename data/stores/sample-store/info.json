@@ -1,0 +1,9 @@
+{
+  "id": "sample-store",
+  "name": "範例便當店",
+  "phone": "02-1234-5678",
+  "address": "台北市範例區範例路1號",
+  "description": "這是一家範例便當店，提供各式美味便當",
+  "active": true,
+  "created_at": "2025-01-01T00:00:00"
+}

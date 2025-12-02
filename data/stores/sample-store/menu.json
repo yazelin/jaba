@@ -1,0 +1,56 @@
+{
+  "store_id": "sample-store",
+  "updated_at": "2025-01-01T00:00:00",
+  "categories": [
+    {
+      "name": "便當類",
+      "items": [
+        {
+          "id": "chicken-leg",
+          "name": "雞腿便當",
+          "price": 85,
+          "description": "酥脆雞腿配三樣配菜",
+          "image": null,
+          "available": true
+        },
+        {
+          "id": "pork-chop",
+          "name": "排骨便當",
+          "price": 80,
+          "description": "香酥排骨配三樣配菜",
+          "image": null,
+          "available": true
+        },
+        {
+          "id": "fish",
+          "name": "魚排便當",
+          "price": 75,
+          "description": "香煎魚排配三樣配菜",
+          "image": null,
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "湯品",
+      "items": [
+        {
+          "id": "miso-soup",
+          "name": "味噌湯",
+          "price": 20,
+          "description": "日式味噌湯",
+          "image": null,
+          "available": true
+        },
+        {
+          "id": "egg-soup",
+          "name": "蛋花湯",
+          "price": 15,
+          "description": "清爽蛋花湯",
+          "image": null,
+          "available": true
+        }
+      ]
+    }
+  ]
+}

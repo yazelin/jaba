@@ -1,0 +1,28 @@
+{
+  "date": "2025-12-02",
+  "store_id": "sample-store",
+  "store_name": "範例便當店",
+  "orders": [
+    {
+      "username": "亞澤",
+      "items": [
+        {
+          "id": "fish",
+          "name": "魚排便當",
+          "price": 75,
+          "quantity": 1,
+          "note": ""
+        }
+      ],
+      "total": 75
+    }
+  ],
+  "item_summary": [
+    {
+      "name": "魚排便當",
+      "quantity": 1
+    }
+  ],
+  "grand_total": 75,
+  "updated_at": "2025-12-02T20:52:24.064528"
+}

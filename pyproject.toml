@@ -1,0 +1,12 @@
+[project]
+name = "jiaba"
+version = "0.1.0"
+description = "AI Agent 協助的午餐訂便當系統"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.75.0",
+    "fastapi>=0.123.4",
+    "python-multipart>=0.0.20",
+    "uvicorn[standard]>=0.38.0",
+]

@@ -1,14 +1,14 @@
 # Project Context
 
 ## Purpose
-jiaba 是一個由 AI Agent (Claude) 協助的午餐訂便當系統。系統名稱 "jiaba" 同時也是 AI Agent 的名稱和 domain 名稱。這是一個供團隊內部使用的工具，目標是簡化午餐訂餐流程。
+jaba（呷爸）是一個由 AI Agent (Claude) 協助的午餐訂便當系統。系統英文名稱 "jaba"，中文顯示名稱為「呷爸」，同時也是 AI Agent 的名稱。這是一個供團隊內部使用的工具，目標是簡化午餐訂餐流程。
 
 ## Tech Stack
-- **後端**: Python 3.12 + FastAPI
+- **後端**: Python 3.12 + FastAPI + Socket.IO（即時通訊）
 - **套件管理**: uv
 - **前端**: 純 HTML/CSS/JavaScript（無框架）
-- **資料儲存**: 檔案系統（資料夾 + 純文字檔案，不使用資料庫）
-- **AI 整合**: Claude API (Anthropic)
+- **資料儲存**: 檔案系統（資料夾 + JSON 檔案，不使用資料庫）
+- **AI 整合**: Claude CLI
 
 ## Project Conventions
 
@@ -38,9 +38,10 @@ jiaba 是一個由 AI Agent (Claude) 協助的午餐訂便當系統。系統名�
 
 ## Domain Context
 - **午餐訂餐**: 系統協助團隊成員訂購午餐便當
-- **AI Agent (jiaba)**: Claude 扮演的助手角色，協助處理訂餐相關事務
+- **AI Agent (呷爸)**: Claude 扮演的助手角色，協助處理訂餐相關事務
 - **便當店**: 合作的便當店家資訊
 - **訂單**: 團隊成員的午餐訂單
+- **團隊聊天**: 團隊成員即時討論今日午餐
 
 ## Important Constraints
 - 資料使用檔案系統儲存，無需資料庫

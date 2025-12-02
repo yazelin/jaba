@@ -3,49 +3,70 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>jiaba - 今日訂餐看板</title>
+  <title>呷爸 - 今日訂餐看板</title>
+  <link rel="icon" type="image/png" href="/static/images/jaba.png">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div class="board">
+  <div class="container board-container">
+    <div class="board board-wide">
+      <!-- 中上：標題 -->
       <div class="board-header">
-        <h1 class="board-title">🍱 jiaba 訂餐看板</h1>
+        <h1 class="board-title"><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸訂餐看板</h1>
         <p class="board-subtitle" id="today-date"></p>
       </div>
 
-      <div class="store-name" id="store-name">
-        <span class="no-store">尚未設定今日店家</span>
-      </div>
+      <!-- 左右兩欄 -->
+      <div class="board-columns">
+        <!-- 左欄：店家 + 聊天 -->
+        <div class="board-left">
+          <div class="store-name" id="store-name">
+            <span class="no-store">尚未設定今日店家</span>
+          </div>
 
-      <div class="orders-section">
-        <h2 class="section-title">📋 訂單列表</h2>
-        <div class="orders-list" id="orders-list">
-          <div class="empty-state">
-            <div class="empty-state-icon">🍽️</div>
-            <p>還沒有人訂餐</p>
+          <!-- 團隊聊天訊息（唯讀） -->
+          <div class="orders-section">
+            <h2 class="section-title">💬 團隊聊天</h2>
+            <div class="chat-readonly" id="chat-readonly">
+              <div class="empty-state">
+                <p>尚無聊天訊息</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="orders-section">
-        <h2 class="section-title">📊 品項統計</h2>
-        <div class="item-summary" id="item-summary">
-          <div class="empty-state">
-            <p>尚無統計資料</p>
+        <!-- 右欄：訂單 + 統計 + 按鈕 -->
+        <div class="board-right">
+          <div class="orders-section">
+            <h2 class="section-title">📋 訂單列表</h2>
+            <div class="orders-list" id="orders-list">
+              <div class="empty-state">
+                <div class="empty-state-icon">🍽️</div>
+                <p>還沒有人訂餐</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="orders-section">
+            <h2 class="section-title">📊 品項統計</h2>
+            <div class="item-summary" id="item-summary">
+              <div class="empty-state">
+                <p>尚無統計資料</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grand-total" id="grand-total">
+            <div class="grand-total-label">總金額</div>
+            <div class="grand-total-amount">$0</div>
+          </div>
+
+          <div class="buttons">
+            <a href="/order" class="btn btn-primary">🍱 我要訂便當</a>
+            <a href="/manager" class="btn btn-secondary">⚙️ 管理員</a>
           </div>
         </div>
-      </div>
-
-      <div class="grand-total" id="grand-total">
-        <div class="grand-total-label">總金額</div>
-        <div class="grand-total-amount">$0</div>
-      </div>
-
-      <div class="buttons">
-        <a href="/order" class="btn btn-primary">🍱 我要訂便當</a>
-        <a href="/manager" class="btn btn-secondary">⚙️ 管理員</a>
       </div>
     </div>
   </div>
@@ -54,10 +75,36 @@
     // Socket.IO 連線
     const socket = io();
 
+    // === 瀏覽器通知 ===
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    function sendBrowserNotification(title, body, tag = null) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const options = {
+          body: body,
+          icon: '/static/images/jaba.png',
+          tag: tag || `jaba-${Date.now()}`,
+          requireInteraction: false
+        };
+
+        const notification = new Notification(title, options);
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+
+    requestNotificationPermission();
+
     // 顯示今日日期
     const today = new Date();
     document.getElementById('today-date').textContent =
-      `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()} ${['日','一','二','三','四','五','六'][today.getDay()]}`;
+      `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()} 星期${['日','一','二','三','四','五','六'][today.getDay()]}`;
 
     // 載入資料
     async function loadData() {
@@ -72,28 +119,81 @@
 
     // 更新看板
     function updateBoard(data) {
-      const { today: todayInfo, summary } = data;
+      const { today: todayInfo, store: storeInfo, stores: storesDetail, summary } = data;
 
-      // 更新店家名稱
+      // 更新店家名稱（支援多店家）
       const storeNameEl = document.getElementById('store-name');
-      if (todayInfo && todayInfo.store_name) {
-        storeNameEl.innerHTML = `🏪 ${todayInfo.store_name}`;
+      if (storesDetail && storesDetail.length > 0) {
+        let storeHtml = '';
+        storesDetail.forEach((storeData, index) => {
+          const store = storeData.store;
+          if (store) {
+            if (index > 0) storeHtml += '<div class="store-divider-board"></div>';
+            storeHtml += `<div class="store-name-item">🏪 ${store.name}</div>`;
+            if (store.note) {
+              storeHtml += `<div class="store-note">📌 ${store.note}</div>`;
+            }
+          }
+        });
+        storeNameEl.innerHTML = storeHtml || '<span class="no-store">尚未設定今日店家</span>';
+      } else if (todayInfo && todayInfo.store_name) {
+        // 向後相容：單店家
+        let storeHtml = `🏪 ${todayInfo.store_name}`;
+        if (storeInfo && storeInfo.note) {
+          storeHtml += `<div class="store-note">📌 ${storeInfo.note}</div>`;
+        }
+        storeNameEl.innerHTML = storeHtml;
       } else {
         storeNameEl.innerHTML = '<span class="no-store">尚未設定今日店家</span>';
       }
 
-      // 更新訂單列表
+      // 更新訂單列表（支援多店家分組）
       const ordersListEl = document.getElementById('orders-list');
       if (summary && summary.orders && summary.orders.length > 0) {
-        ordersListEl.innerHTML = summary.orders.map(order => `
-          <div class="order-card">
-            <div>
-              <div class="order-user">${order.username}</div>
-              <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+        const hasMultipleStores = storesDetail && storesDetail.length > 1;
+
+        if (hasMultipleStores) {
+          // 按店家分組訂單
+          const ordersByStore = {};
+          summary.orders.forEach(order => {
+            const storeId = order.store_id || 'unknown';
+            if (!ordersByStore[storeId]) {
+              ordersByStore[storeId] = [];
+            }
+            ordersByStore[storeId].push(order);
+          });
+
+          let html = '';
+          Object.keys(ordersByStore).forEach((storeId, index) => {
+            const orders = ordersByStore[storeId];
+            const storeName = orders[0]?.store_name || '未知店家';
+
+            if (index > 0) html += '<div class="orders-store-divider"></div>';
+            html += `<div class="orders-store-header">🏪 ${storeName}</div>`;
+
+            html += orders.map(order => `
+              <div class="order-card">
+                <div>
+                  <div class="order-user">${order.username}</div>
+                  <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+                </div>
+                <div class="order-total">$${order.total}</div>
+              </div>
+            `).join('');
+          });
+          ordersListEl.innerHTML = html;
+        } else {
+          // 單店家：直接列出
+          ordersListEl.innerHTML = summary.orders.map(order => `
+            <div class="order-card">
+              <div>
+                <div class="order-user">${order.username}</div>
+                <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+              </div>
+              <div class="order-total">$${order.total}</div>
             </div>
-            <div class="order-total">$${order.total}</div>
-          </div>
-        `).join('');
+          `).join('');
+        }
       } else {
         ordersListEl.innerHTML = `
           <div class="empty-state">
@@ -130,26 +230,108 @@
     // 監聽即時事件
     socket.on('order_created', (data) => {
       showNotification(`${data.username} 訂了便當！`);
+      sendBrowserNotification('新訂單', `${data.username} 訂了便當！`, 'order-created');
       loadData();
     });
 
     socket.on('order_updated', (data) => {
       showNotification(`${data.username} 修改了訂單`);
+      sendBrowserNotification('訂單更新', `${data.username} 修改了訂單`, 'order-updated');
       loadData();
     });
 
     socket.on('order_cancelled', (data) => {
       showNotification(`${data.username} 取消了訂單`);
+      sendBrowserNotification('訂單取消', `${data.username} 取消了訂單`, 'order-cancelled');
+      loadData();
+    });
+
+    socket.on('orders_cleared', (data) => {
+      showNotification('管理員已清除所有訂單');
+      sendBrowserNotification('訂單清除', '管理員已清除所有訂單', 'orders-cleared');
       loadData();
     });
 
     socket.on('store_changed', (data) => {
-      showNotification('今日店家已更新！');
+      const storeName = data.store_name || '新店家';
+      showNotification(`今日店家已更新：${storeName}`);
+      sendBrowserNotification('店家更新', `今日店家已更新：${storeName}`, 'store-changed');
       loadData();
+    });
+
+    // === 聊天訊息（唯讀）===
+    async function loadChatMessages() {
+      try {
+        const res = await fetch('/api/chat/messages');
+        const data = await res.json();
+        updateChatDisplay(data.messages || []);
+      } catch (err) {
+        console.error('載入聊天訊息失敗:', err);
+      }
+    }
+
+    function updateChatDisplay(messages) {
+      const chatEl = document.getElementById('chat-readonly');
+
+      if (!messages || messages.length === 0) {
+        chatEl.innerHTML = '<div class="empty-state"><p>尚無聊天訊息</p></div>';
+        return;
+      }
+
+      // 只顯示最近 10 則訊息
+      const recentMessages = messages.slice(-10);
+
+      chatEl.innerHTML = recentMessages.map(msg => {
+        const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        return `
+          <div class="chat-readonly-message">
+            <span class="chat-readonly-user">${msg.username}</span>
+            <span class="chat-readonly-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+            <span class="chat-readonly-time">${time}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addChatMessage(msg) {
+      const chatEl = document.getElementById('chat-readonly');
+
+      // 如果是空狀態，清空
+      if (chatEl.querySelector('.empty-state')) {
+        chatEl.innerHTML = '';
+      }
+
+      const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const msgEl = document.createElement('div');
+      msgEl.className = 'chat-readonly-message';
+      msgEl.innerHTML = `
+        <span class="chat-readonly-user">${msg.username}</span>
+        <span class="chat-readonly-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+        <span class="chat-readonly-time">${time}</span>
+      `;
+      chatEl.appendChild(msgEl);
+
+      // 只保留最近 10 則
+      while (chatEl.children.length > 10) {
+        chatEl.removeChild(chatEl.firstChild);
+      }
+    }
+
+    // 監聽新聊天訊息
+    socket.on('chat_message', (msg) => {
+      addChatMessage(msg);
     });
 
     // 初始載入
     loadData();
+    loadChatMessages();
 
     // 每 30 秒自動刷新
     setInterval(loadData, 30000);

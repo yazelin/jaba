@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>jiaba - 管理員</title>
+  <title>呷爸 - 管理員</title>
+  <link rel="icon" type="image/png" href="/static/images/jaba.png">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
@@ -23,25 +24,436 @@
 
   <!-- 管理介面 -->
   <div class="container" id="manager-section" style="display: none;">
-    <div class="chat-container">
-      <div class="chat-header">
-        <h1>⚙️ jiaba 管理模式</h1>
+    <div class="order-page-layout">
+      <!-- 左側：對話區 -->
+      <div class="chat-container">
+        <div class="chat-header">
+          <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸管理模式</h1>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+          <!-- 訊息會動態加入這裡 -->
+        </div>
+
+        <div class="chat-input" id="chat-input">
+          <input type="text" id="message-input" placeholder="輸入管理指令..." onkeypress="handleKeyPress(event)">
+          <button onclick="sendMessage()">發送</button>
+        </div>
       </div>
 
-      <div class="chat-messages" id="chat-messages">
-        <!-- 訊息會動態加入這裡 -->
-      </div>
+      <!-- 右側：管理面板 -->
+      <div class="side-panel" id="admin-panel">
+        <!-- 今日店家資訊 -->
+        <div class="panel-card store-info-panel">
+          <div class="panel-header">
+            <span>🏪</span>
+            <span>今日店家</span>
+          </div>
+          <div class="panel-content" id="store-info-content">
+            <div class="no-store-msg">尚未設定今日店家</div>
+          </div>
+        </div>
 
-      <div class="chat-input" id="chat-input">
-        <input type="text" id="message-input" placeholder="輸入管理指令..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">發送</button>
+        <!-- 訂單總覽面板 -->
+        <div class="panel-card orders-panel">
+          <div class="panel-header">
+            <span>📦</span>
+            <span>今日訂單</span>
+          </div>
+          <div class="panel-content" id="orders-content">
+            <div class="orders-empty">目前還沒有訂單</div>
+          </div>
+        </div>
+
+        <!-- 付款狀態面板 -->
+        <div class="panel-card payments-panel">
+          <div class="panel-header">
+            <span>💰</span>
+            <span>付款狀態</span>
+          </div>
+          <div class="panel-content" id="payments-content">
+            <div class="orders-empty">無付款資料</div>
+          </div>
+        </div>
+
+        <!-- 店家管理面板 -->
+        <div class="panel-card stores-panel">
+          <div class="panel-header">
+            <span>🏬</span>
+            <span>店家管理</span>
+            <button class="panel-header-btn" onclick="openMenuUpload()" title="上傳菜單圖片">📷</button>
+          </div>
+          <div class="panel-content stores-panel-content" id="stores-content">
+            <div class="orders-empty">載入中...</div>
+          </div>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 菜單圖片上傳對話框 -->
+  <div class="modal-overlay" id="menu-upload-modal" style="display: none;">
+    <div class="modal-content menu-upload-modal">
+      <div class="modal-header">
+        <h3>📷 上傳菜單圖片</h3>
+        <button class="modal-close" onclick="closeMenuUpload()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- 步驟 1：上傳圖片 -->
+        <div id="upload-step" class="upload-step">
+          <div class="upload-area" id="upload-area" onclick="document.getElementById('menu-image-input').click()">
+            <div class="upload-icon">📷</div>
+            <div class="upload-text">點擊或拖放圖片到這裡</div>
+            <div class="upload-hint">支援 JPG、PNG，最大 10MB</div>
+          </div>
+          <input type="file" id="menu-image-input" accept="image/jpeg,image/png" style="display: none;" onchange="handleImageSelect(event)">
+
+          <div class="upload-preview" id="upload-preview" style="display: none;">
+            <img id="preview-image" src="" alt="預覽">
+            <button class="btn btn-secondary" onclick="clearImage()">清除</button>
+          </div>
+
+          <div class="store-select">
+            <label>選擇店家：</label>
+            <select id="target-store-select">
+              <option value="">-- 選擇現有店家 --</option>
+              <option value="__new__">+ 新增店家</option>
+            </select>
+            <input type="text" id="new-store-name" placeholder="輸入新店家名稱" style="display: none;">
+          </div>
+
+          <div class="upload-error" id="upload-error" style="display: none;"></div>
+
+          <button class="btn btn-primary" id="recognize-btn" onclick="recognizeMenu()" disabled>
+            🔍 開始辨識
+          </button>
+        </div>
+
+        <!-- 步驟 2：辨識中 -->
+        <div id="recognizing-step" class="upload-step" style="display: none;">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">AI 正在辨識菜單，請稍候...</div>
+        </div>
+
+        <!-- 步驟 3：編輯結果 -->
+        <div id="result-step" class="upload-step" style="display: none;">
+          <div class="result-warnings" id="result-warnings"></div>
+          <div class="result-editor" id="result-editor">
+            <!-- 動態生成的編輯表格 -->
+          </div>
+          <div class="result-actions">
+            <button class="btn btn-secondary" onclick="backToUpload()">重新上傳</button>
+            <button class="btn btn-primary" onclick="saveRecognizedMenu()">確認並儲存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 團隊聊天室 -->
+  <div class="team-chat minimized" id="team-chat" style="display: none;">
+    <div class="team-chat-header" onclick="toggleTeamChat()">
+      <span class="team-chat-title">
+        <span>💬 團隊聊天室</span>
+        <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
+      </span>
+      <button class="team-chat-toggle" id="chat-toggle-btn">▲</button>
+    </div>
+    <div class="team-chat-messages" id="team-chat-messages">
+      <!-- 訊息會動態加入這裡 -->
+    </div>
+    <div class="team-chat-input">
+      <input type="text" id="team-chat-input" placeholder="輸入訊息..." onkeypress="handleTeamChatKeyPress(event)">
+      <button onclick="sendTeamChatMessage()">發送</button>
     </div>
   </div>
 
   <script>
     const socket = io();
     const username = '管理員';
+    let todayInfo = null;
+    let todaySummary = null;
+    let todayPayments = null;
+    let todayStores = [];  // 多店家資料
+    let allStores = [];    // 所有店家資料（含菜單）
+
+    // === 瀏覽器通知 ===
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    function sendBrowserNotification(title, body, tag = null) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const options = {
+          body: body,
+          icon: '/static/images/jaba.png',
+          tag: tag || `jaba-${Date.now()}`,
+          requireInteraction: false
+        };
+
+        const notification = new Notification(title, options);
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+
+    requestNotificationPermission();
+
+    // === 管理面板資料載入 ===
+    async function loadAdminData() {
+      try {
+        // 同時載入今日資訊和付款資料
+        const [todayRes, paymentsRes] = await Promise.all([
+          fetch('/api/today'),
+          fetch('/api/payments')
+        ]);
+
+        const todayData = await todayRes.json();
+        const paymentsData = await paymentsRes.json();
+
+        todayInfo = todayData.today;
+        todaySummary = todayData.summary;
+        todayPayments = paymentsData;
+        todayStores = todayData.stores || [];
+
+        // 更新各面板（支援多店家）
+        updateStoreInfoPanel(todayData.today, todayData.stores);
+        updateOrdersPanel(todayData.summary);
+        updatePaymentsPanel(paymentsData);
+      } catch (err) {
+        console.error('載入管理資料失敗:', err);
+      }
+    }
+
+    function updateStoreInfoPanel(today, stores) {
+      const content = document.getElementById('store-info-content');
+
+      // 支援多店家
+      if (stores && stores.length > 0) {
+        let html = '';
+        stores.forEach((storeData, index) => {
+          const store = storeData.store;
+          if (store) {
+            if (index > 0) html += '<div class="store-divider"></div>';
+            html += `<div class="store-title">${store.name}</div>`;
+            if (store.note) {
+              html += `<div class="store-note">${store.note}</div>`;
+            }
+          }
+        });
+        content.innerHTML = html || '<div class="no-store-msg">尚未設定今日店家</div>';
+        return;
+      }
+
+      // 向後相容：單店家
+      if (!today || !today.store_name) {
+        content.innerHTML = '<div class="no-store-msg">尚未設定今日店家</div>';
+        return;
+      }
+      content.innerHTML = `<div class="store-title">${today.store_name}</div>`;
+    }
+
+    function updateOrdersPanel(summary) {
+      const content = document.getElementById('orders-content');
+      if (!summary || !summary.orders || summary.orders.length === 0) {
+        content.innerHTML = '<div class="orders-empty">目前還沒有訂單</div>';
+        return;
+      }
+
+      // 多店家時按店家分組
+      const hasMultipleStores = todayStores && todayStores.length > 1;
+      let html = '';
+
+      if (hasMultipleStores) {
+        // 按店家分組訂單
+        const ordersByStore = {};
+        summary.orders.forEach(order => {
+          const storeId = order.store_id || 'unknown';
+          if (!ordersByStore[storeId]) {
+            ordersByStore[storeId] = [];
+          }
+          ordersByStore[storeId].push(order);
+        });
+
+        // 依店家顯示
+        Object.keys(ordersByStore).forEach((storeId, index) => {
+          const orders = ordersByStore[storeId];
+          const storeName = orders[0]?.store_name || '未知店家';
+
+          if (index > 0) html += '<div class="orders-store-divider"></div>';
+          html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
+
+          orders.forEach(order => {
+            const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+            html += `
+              <div class="live-order-item">
+                <div>
+                  <div class="live-order-user">${order.username}</div>
+                  <div class="live-order-items">${itemsText}</div>
+                </div>
+                <div class="live-order-total">$${order.total}</div>
+              </div>
+            `;
+          });
+        });
+      } else {
+        // 單店家：直接列出
+        summary.orders.forEach(order => {
+          const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+          html += `
+            <div class="live-order-item">
+              <div>
+                <div class="live-order-user">${order.username}</div>
+                <div class="live-order-items">${itemsText}</div>
+              </div>
+              <div class="live-order-total">$${order.total}</div>
+            </div>
+          `;
+        });
+      }
+
+      // 加上總計
+      html += `
+        <div class="orders-summary">
+          <span class="orders-summary-label">總計 ${summary.orders.length} 份</span>
+          <span class="orders-summary-amount">$${summary.grand_total}</span>
+        </div>
+      `;
+      content.innerHTML = html;
+    }
+
+    function updatePaymentsPanel(payments) {
+      const content = document.getElementById('payments-content');
+      if (!payments || !payments.records || payments.records.length === 0) {
+        content.innerHTML = '<div class="orders-empty">無付款資料</div>';
+        return;
+      }
+
+      let html = '';
+      payments.records.forEach(record => {
+        const paidClass = record.paid ? ' paid' : '';
+        const statusText = record.paid ? '已付' : '未付';
+        const statusClass = record.paid ? 'paid' : 'pending';
+        html += `
+          <div class="payment-item${paidClass}">
+            <div>
+              <span class="payment-user">${record.username}</span>
+              <span class="payment-amount">$${record.amount}</span>
+            </div>
+            <span class="payment-status ${statusClass}">${statusText}</span>
+          </div>
+        `;
+      });
+
+      // 加上付款總覽
+      html += `
+        <div class="payments-summary">
+          <div class="payments-summary-row">
+            <span>已收款</span>
+            <span class="payments-collected">$${payments.total_collected || 0}</span>
+          </div>
+          <div class="payments-summary-row">
+            <span>待收款</span>
+            <span class="payments-pending">$${payments.total_pending || 0}</span>
+          </div>
+        </div>
+      `;
+      content.innerHTML = html;
+    }
+
+    // === 店家管理面板 ===
+    async function loadAllStores() {
+      try {
+        const res = await fetch('/api/stores/all');
+        allStores = await res.json();
+        updateStoresPanel(allStores);
+      } catch (err) {
+        console.error('載入店家資料失敗:', err);
+        document.getElementById('stores-content').innerHTML =
+          '<div class="orders-empty">載入失敗</div>';
+      }
+    }
+
+    function updateStoresPanel(stores) {
+      const content = document.getElementById('stores-content');
+      if (!stores || stores.length === 0) {
+        content.innerHTML = '<div class="orders-empty">尚無店家資料</div>';
+        return;
+      }
+
+      let html = '';
+      stores.forEach((storeData, index) => {
+        const store = storeData.store;
+        const menu = storeData.menu;
+        const isActive = store.active !== false;
+        const statusBadge = isActive
+          ? '<span class="store-status active">啟用</span>'
+          : '<span class="store-status inactive">停用</span>';
+
+        html += `
+          <div class="store-manage-item">
+            <div class="store-manage-header" onclick="toggleStoreMenu('store-menu-${index}')">
+              <div class="store-manage-info">
+                <span class="store-manage-name">${store.name}</span>
+                ${statusBadge}
+              </div>
+              <span class="store-manage-toggle" id="toggle-${index}">▼</span>
+            </div>
+            <div class="store-manage-detail" id="store-menu-${index}" style="display: none;">
+              <div class="store-manage-meta">
+                <div>ID: ${store.id}</div>
+                ${store.phone ? `<div>電話: ${store.phone}</div>` : ''}
+                ${store.note ? `<div class="store-manage-note">📌 ${store.note}</div>` : ''}
+              </div>
+              <div class="store-manage-menu">
+        `;
+
+        if (menu && menu.categories && menu.categories.length > 0) {
+          menu.categories.forEach(category => {
+            html += `<div class="menu-cat-title">${category.name}</div>`;
+            html += '<div class="menu-cat-items">';
+            category.items.forEach(item => {
+              const availClass = item.available === false ? ' unavailable' : '';
+              html += `
+                <div class="menu-cat-item${availClass}">
+                  <span>${item.name}</span>
+                  <span>$${item.price}</span>
+                </div>
+              `;
+            });
+            html += '</div>';
+          });
+        } else {
+          html += '<div class="no-menu-msg">尚無菜單</div>';
+        }
+
+        html += `
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      content.innerHTML = html;
+    }
+
+    function toggleStoreMenu(menuId) {
+      const menuEl = document.getElementById(menuId);
+      const index = menuId.replace('store-menu-', '');
+      const toggleEl = document.getElementById(`toggle-${index}`);
+
+      if (menuEl.style.display === 'none') {
+        menuEl.style.display = 'block';
+        toggleEl.textContent = '▲';
+      } else {
+        menuEl.style.display = 'none';
+        toggleEl.textContent = '▼';
+      }
+    }
 
     // 處理密碼 Enter 鍵
     function handlePasswordKeyPress(event) {
@@ -68,11 +480,17 @@
           // 隱藏密碼輸入，顯示管理介面
           document.getElementById('password-section').style.display = 'none';
           document.getElementById('manager-section').style.display = 'block';
+          document.getElementById('team-chat').style.display = 'flex';
+
+          // 載入管理資料
+          loadAdminData();
+          loadAllStores();
 
           // 顯示歡迎訊息
-          addMessage('assistant', `歡迎，管理員！\n\n你可以：\n• 設定今日店家（例：今天吃 sample-store）\n• 新增店家（例：新增一家店叫「美味便當」）\n• 編輯菜單（例：幫 sample-store 新增一道菜）\n• 查看今日訂單\n• 查看付款狀態\n• 標記已付款（例：小明已付款）`);
+          addMessage('assistant', `歡迎，管理員！\n\n你可以：\n• 設定今日店家（例：今天吃 sample-store）\n• 新增今日店家（例：今天再加一家 another-store）\n• 移除今日店家（例：把 sample-store 從今天移除）\n• 新增店家（例：新增一家店叫「美味便當」）\n• 編輯菜單（例：幫 sample-store 新增一道菜）\n• 查看今日訂單\n• 查看付款狀態\n• 標記已付款（例：小明已付款）\n• 清除所有訂單（例：清除今日所有訂單）`);
 
           document.getElementById('message-input').focus();
+          loadChatHistory();
         } else {
           errorMsg.textContent = '密碼錯誤';
           errorMsg.style.display = 'block';
@@ -124,18 +542,31 @@
         // 顯示 AI 回應
         addMessage('assistant', data.message || '收到指令。');
 
-        // 如果有執行動作，顯示結果
-        if (data.action_result) {
-          if (data.action_result.success) {
+        // 處理動作結果（支援多個 actions）
+        const results = data.action_results || (data.action_result ? [data.action_result] : []);
+        let needReloadStores = false;
+        let needReloadAdmin = false;
+
+        results.forEach(result => {
+          if (result.success) {
             let resultMsg = '✅ 操作成功！';
-            if (data.action_result.event === 'store_changed') {
-              resultMsg = `✅ 已設定今日店家：${data.action_result.today?.store_name}`;
+            if (result.event === 'store_changed') {
+              resultMsg = `✅ 已設定今日店家：${result.today?.store_name || ''}`;
+              needReloadAdmin = true;
+            }
+            // 如果是店家或菜單相關操作，標記需要重新載入
+            if (result.store || result.menu) {
+              needReloadStores = true;
             }
             addMessage('assistant', resultMsg);
-          } else if (data.action_result.error) {
-            addMessage('assistant', `❌ 操作失敗：${data.action_result.error}`);
+          } else if (result.error) {
+            addMessage('assistant', `❌ 操作失敗：${result.error}`);
           }
-        }
+        });
+
+        // 批次重新載入
+        if (needReloadAdmin) loadAdminData();
+        if (needReloadStores) loadAllStores();
 
       } catch (err) {
         document.getElementById(loadingId).remove();
@@ -152,7 +583,17 @@
       const msgEl = document.createElement('div');
       msgEl.id = id;
       msgEl.className = `message ${role}`;
-      msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+
+      if (role === 'assistant') {
+        msgEl.innerHTML = `
+          <div class="message-avatar">
+            <img src="/static/images/jaba.png" alt="呷爸" class="avatar-icon">
+          </div>
+          <div class="message-content">${content.replace(/\n/g, '<br>')}</div>
+        `;
+      } else {
+        msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+      }
 
       messagesEl.appendChild(msgEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -160,13 +601,41 @@
       return id;
     }
 
-    // 監聽事件
+    // 監聯事件
     socket.on('order_created', (data) => {
+      // 更新訂單面板
+      if (data.summary) {
+        updateOrdersPanel(data.summary);
+      }
+      // 重新載入付款資料
+      loadAdminData();
       showNotification(`${data.username} 訂了便當！`);
+      sendBrowserNotification('新訂單', `${data.username} 訂了便當！`, 'order-created');
     });
 
     socket.on('order_cancelled', (data) => {
+      // 更新訂單面板
+      if (data.summary) {
+        updateOrdersPanel(data.summary);
+      }
+      // 重新載入付款資料
+      loadAdminData();
       showNotification(`${data.username} 取消了訂單`);
+      sendBrowserNotification('訂單取消', `${data.username} 取消了訂單`, 'order-cancelled');
+    });
+
+    socket.on('orders_cleared', (data) => {
+      // 清空訂單和付款面板
+      updateOrdersPanel(null);
+      updatePaymentsPanel(null);
+      showNotification('所有訂單已清除');
+    });
+
+    socket.on('store_changed', (data) => {
+      const storeName = data.store_name || '新店家';
+      // 重新載入管理資料
+      loadAdminData();
+      showNotification(`今日店家已更新：${storeName}`);
     });
 
     function showNotification(message) {
@@ -175,6 +644,417 @@
       notif.textContent = message;
       document.body.appendChild(notif);
       setTimeout(() => notif.remove(), 3000);
+    }
+
+    // === 團隊聊天室 ===
+    let teamChatOpen = false;
+    let unreadCount = 0;
+
+    function toggleTeamChat() {
+      const chatEl = document.getElementById('team-chat');
+      teamChatOpen = !teamChatOpen;
+
+      if (teamChatOpen) {
+        chatEl.classList.remove('minimized');
+        document.getElementById('chat-toggle-btn').textContent = '▼';
+        unreadCount = 0;
+        updateUnreadBadge();
+        const messagesEl = document.getElementById('team-chat-messages');
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else {
+        chatEl.classList.add('minimized');
+        document.getElementById('chat-toggle-btn').textContent = '▲';
+      }
+    }
+
+    function updateUnreadBadge() {
+      const badge = document.getElementById('unread-badge');
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    function handleTeamChatKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendTeamChatMessage();
+      }
+    }
+
+    async function sendTeamChatMessage() {
+      const input = document.getElementById('team-chat-input');
+      const content = input.value.trim();
+
+      if (!content) return;
+
+      input.value = '';
+
+      try {
+        await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, content })
+        });
+      } catch (err) {
+        console.error('發送訊息失敗:', err);
+      }
+    }
+
+    function addTeamChatMessage(msg) {
+      const messagesEl = document.getElementById('team-chat-messages');
+      const isOwn = msg.username === username;
+
+      const msgEl = document.createElement('div');
+      msgEl.className = `team-chat-message ${isOwn ? 'own' : ''}`;
+
+      const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      msgEl.innerHTML = `
+        <div class="team-chat-message-header">
+          <span class="team-chat-message-user">${msg.username}</span>
+          <span class="team-chat-message-time">${time}</span>
+        </div>
+        <div class="team-chat-message-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      `;
+
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function loadChatHistory() {
+      try {
+        const res = await fetch('/api/chat/messages');
+        const data = await res.json();
+
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach(msg => addTeamChatMessage(msg));
+        }
+      } catch (err) {
+        console.error('載入聊天記錄失敗:', err);
+      }
+    }
+
+    socket.on('chat_message', (msg) => {
+      addTeamChatMessage(msg);
+
+      if (msg.username !== username) {
+        if (!teamChatOpen) {
+          unreadCount++;
+          updateUnreadBadge();
+        }
+        sendBrowserNotification(msg.username, msg.content, `chat-${msg.id}`);
+      }
+    });
+
+    // === 菜單圖片辨識 ===
+    let selectedImage = null;
+    let recognizedMenu = null;
+    let targetStoreId = null;
+
+    function openMenuUpload() {
+      document.getElementById('menu-upload-modal').style.display = 'flex';
+      // 填充店家下拉選單
+      const select = document.getElementById('target-store-select');
+      select.innerHTML = '<option value="">-- 選擇現有店家 --</option><option value="__new__">+ 新增店家</option>';
+      allStores.forEach(storeData => {
+        const store = storeData.store;
+        select.innerHTML += `<option value="${store.id}">${store.name}</option>`;
+      });
+      // 重置狀態
+      resetUploadState();
+    }
+
+    function closeMenuUpload() {
+      document.getElementById('menu-upload-modal').style.display = 'none';
+      resetUploadState();
+    }
+
+    function resetUploadState() {
+      selectedImage = null;
+      recognizedMenu = null;
+      targetStoreId = null;
+      document.getElementById('upload-step').style.display = 'block';
+      document.getElementById('recognizing-step').style.display = 'none';
+      document.getElementById('result-step').style.display = 'none';
+      document.getElementById('upload-preview').style.display = 'none';
+      document.getElementById('upload-area').style.display = 'block';
+      document.getElementById('recognize-btn').disabled = true;
+      document.getElementById('menu-image-input').value = '';
+      document.getElementById('target-store-select').value = '';
+      document.getElementById('new-store-name').style.display = 'none';
+      document.getElementById('new-store-name').value = '';
+    }
+
+    // 處理店家選擇變更
+    document.getElementById('target-store-select').addEventListener('change', (e) => {
+      const newStoreInput = document.getElementById('new-store-name');
+      if (e.target.value === '__new__') {
+        newStoreInput.style.display = 'block';
+      } else {
+        newStoreInput.style.display = 'none';
+      }
+      updateRecognizeBtn();
+    });
+
+    // 處理圖片選擇
+    function handleImageSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('圖片大小不能超過 10MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        selectedImage = e.target.result;
+        document.getElementById('preview-image').src = selectedImage;
+        document.getElementById('upload-preview').style.display = 'block';
+        document.getElementById('upload-area').style.display = 'none';
+        updateRecognizeBtn();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      selectedImage = null;
+      document.getElementById('upload-preview').style.display = 'none';
+      document.getElementById('upload-area').style.display = 'block';
+      document.getElementById('menu-image-input').value = '';
+      updateRecognizeBtn();
+    }
+
+    function updateRecognizeBtn() {
+      const select = document.getElementById('target-store-select');
+      const newStoreName = document.getElementById('new-store-name').value.trim();
+      const hasStore = select.value && (select.value !== '__new__' || newStoreName);
+      document.getElementById('recognize-btn').disabled = !selectedImage || !hasStore;
+    }
+
+    document.getElementById('new-store-name').addEventListener('input', updateRecognizeBtn);
+
+    // 拖放支援
+    const uploadArea = document.getElementById('upload-area');
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        document.getElementById('menu-image-input').files = e.dataTransfer.files;
+        handleImageSelect({ target: { files: e.dataTransfer.files } });
+      }
+    });
+
+    // 開始辨識
+    function showUploadError(message) {
+      const errorEl = document.getElementById('upload-error');
+      errorEl.innerHTML = `<div class="error-box">❌ ${message}</div>`;
+      errorEl.style.display = 'block';
+    }
+
+    function hideUploadError() {
+      const errorEl = document.getElementById('upload-error');
+      errorEl.style.display = 'none';
+    }
+
+    async function recognizeMenu() {
+      const select = document.getElementById('target-store-select');
+      const storeId = select.value === '__new__' ? null : select.value;
+      const storeName = select.value === '__new__' ? document.getElementById('new-store-name').value.trim() : null;
+
+      hideUploadError();
+      document.getElementById('upload-step').style.display = 'none';
+      document.getElementById('recognizing-step').style.display = 'block';
+
+      try {
+        const res = await fetch('/api/recognize-menu', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            store_id: storeId,
+            store_name: storeName,
+            image: selectedImage
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          console.error('辨識錯誤:', data.error);
+          showUploadError(data.error);
+          document.getElementById('recognizing-step').style.display = 'none';
+          document.getElementById('upload-step').style.display = 'block';
+          return;
+        }
+
+        targetStoreId = data.store_id;
+        recognizedMenu = data.recognized_menu;
+
+        // 顯示結果
+        showRecognitionResult(data.recognized_menu, data.warnings);
+
+      } catch (err) {
+        console.error('辨識失敗:', err);
+        showUploadError('連線失敗，請稍後再試。錯誤：' + err.message);
+        document.getElementById('recognizing-step').style.display = 'none';
+        document.getElementById('upload-step').style.display = 'block';
+      }
+    }
+
+    function showRecognitionResult(menu, warnings) {
+      document.getElementById('recognizing-step').style.display = 'none';
+      document.getElementById('result-step').style.display = 'block';
+
+      // 顯示警告
+      const warningsEl = document.getElementById('result-warnings');
+      if (warnings && warnings.length > 0) {
+        warningsEl.innerHTML = '<div class="warning-box">⚠️ ' + warnings.join('<br>') + '</div>';
+      } else {
+        warningsEl.innerHTML = '';
+      }
+
+      // 生成編輯表格
+      const editor = document.getElementById('result-editor');
+      let html = '';
+
+      if (menu && menu.categories) {
+        menu.categories.forEach((category, catIdx) => {
+          html += `
+            <div class="result-category" data-cat-idx="${catIdx}">
+              <div class="result-category-header">
+                <input type="text" class="cat-name-input" value="${category.name}" data-cat-idx="${catIdx}">
+                <button class="btn-icon" onclick="addItem(${catIdx})" title="新增品項">➕</button>
+                <button class="btn-icon btn-danger" onclick="removeCategory(${catIdx})" title="刪除分類">🗑️</button>
+              </div>
+              <div class="result-items" id="cat-items-${catIdx}">
+          `;
+
+          if (category.items) {
+            category.items.forEach((item, itemIdx) => {
+              html += generateItemRow(catIdx, itemIdx, item);
+            });
+          }
+
+          html += `
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      html += '<button class="btn btn-secondary" onclick="addCategory()">+ 新增分類</button>';
+      editor.innerHTML = html;
+    }
+
+    function generateItemRow(catIdx, itemIdx, item) {
+      return `
+        <div class="result-item" data-cat-idx="${catIdx}" data-item-idx="${itemIdx}">
+          <input type="text" class="item-name" value="${item.name || ''}" placeholder="品名">
+          <input type="number" class="item-price" value="${item.price || 0}" placeholder="價格">
+          <input type="text" class="item-desc" value="${item.description || ''}" placeholder="說明">
+          <button class="btn-icon btn-danger" onclick="removeItem(${catIdx}, ${itemIdx})">🗑️</button>
+        </div>
+      `;
+    }
+
+    function addCategory() {
+      recognizedMenu.categories.push({ name: '新分類', items: [] });
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function removeCategory(catIdx) {
+      recognizedMenu.categories.splice(catIdx, 1);
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function addItem(catIdx) {
+      recognizedMenu.categories[catIdx].items.push({
+        id: `item-new-${Date.now()}`,
+        name: '',
+        price: 0,
+        description: '',
+        available: true
+      });
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function removeItem(catIdx, itemIdx) {
+      recognizedMenu.categories[catIdx].items.splice(itemIdx, 1);
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function backToUpload() {
+      document.getElementById('result-step').style.display = 'none';
+      document.getElementById('upload-step').style.display = 'block';
+    }
+
+    // 儲存辨識結果
+    async function saveRecognizedMenu() {
+      // 從 DOM 收集編輯後的資料
+      const categories = [];
+      document.querySelectorAll('.result-category').forEach((catEl, catIdx) => {
+        const catName = catEl.querySelector('.cat-name-input').value.trim() || '未命名';
+        const items = [];
+
+        catEl.querySelectorAll('.result-item').forEach((itemEl, itemIdx) => {
+          const name = itemEl.querySelector('.item-name').value.trim();
+          const price = parseInt(itemEl.querySelector('.item-price').value) || 0;
+          const desc = itemEl.querySelector('.item-desc').value.trim();
+
+          if (name) {
+            items.push({
+              id: `item-${catIdx}-${itemIdx}`,
+              name: name,
+              price: price,
+              description: desc,
+              available: true
+            });
+          }
+        });
+
+        if (items.length > 0 || catName) {
+          categories.push({ name: catName, items: items });
+        }
+      });
+
+      // 呼叫 API 儲存
+      try {
+        const res = await fetch('/api/save-menu', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            store_id: targetStoreId,
+            categories: categories
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || '儲存失敗');
+        }
+
+        closeMenuUpload();
+        loadAllStores();
+        showNotification('菜單已儲存！');
+
+      } catch (err) {
+        console.error('儲存失敗:', err);
+        alert('儲存失敗：' + err.message);
+      }
     }
   </script>
 </body>

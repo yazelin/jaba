@@ -1,14 +1,14 @@
 {
-  "date": "2025-12-02",
+  "date": "2025-12-03",
   "records": [
     {
       "username": "亞澤",
-      "amount": 0,
+      "amount": 198,
       "paid": false,
       "paid_at": null,
       "note": null
     }
   ],
   "total_collected": 0,
-  "total_pending": 0
+  "total_pending": 198
 }

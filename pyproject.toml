@@ -1,5 +1,5 @@
 [project]
-name = "jiaba"
+name = "jaba"
 version = "0.1.0"
 description = "AI Agent 協助的午餐訂便當系統"
 readme = "README.md"

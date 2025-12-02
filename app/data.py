@@ -14,6 +14,7 @@ def ensure_data_dirs():
         DATA_DIR / "stores",
         DATA_DIR / "users",
         DATA_DIR / "orders",
+        DATA_DIR / "chat",
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -60,28 +61,94 @@ def get_config() -> dict:
 
 
 def get_today_info() -> dict:
-    """取得今日訂餐資訊"""
-    return read_json(DATA_DIR / "system" / "today.json") or {}
+    """取得今日訂餐資訊（支援多店家）"""
+    data = read_json(DATA_DIR / "system" / "today.json") or {}
+
+    # 如果是舊格式（單店家），轉換為新格式
+    if data and "stores" not in data and data.get("store_id"):
+        data = {
+            "date": data.get("date", date.today().isoformat()),
+            "stores": [{
+                "store_id": data["store_id"],
+                "store_name": data.get("store_name", ""),
+                "status": data.get("status", "open"),
+                "set_by": data.get("set_by", "管理員"),
+                "set_at": data.get("set_at", "")
+            }],
+            # 向後相容：保留單店家欄位
+            "store_id": data["store_id"],
+            "store_name": data.get("store_name", "")
+        }
+
+    return data
 
 
 def set_today_store(store_id: str, store_name: str, set_by: str = "管理員") -> dict:
-    """設定今日店家"""
-    today = date.today().isoformat()
-    data = {
-        "date": today,
-        "store_id": store_id,
-        "store_name": store_name,
-        "status": "open",
-        "set_by": set_by,
-        "set_at": datetime.now().isoformat()
-    }
+    """設定今日店家（向後相容，設定單一店家會清除其他店家）"""
+    return add_today_store(store_id, store_name, set_by, clear_others=True)
+
+
+def add_today_store(store_id: str, store_name: str, set_by: str = "管理員", clear_others: bool = False) -> dict:
+    """新增今日店家"""
+    today_str = date.today().isoformat()
+    data = read_json(DATA_DIR / "system" / "today.json") or {}
+
+    # 確保是新格式
+    if "stores" not in data or data.get("date") != today_str:
+        data = {"date": today_str, "stores": []}
+
+    # 如果要清除其他店家
+    if clear_others:
+        data["stores"] = []
+
+    # 檢查是否已存在
+    existing = next((s for s in data["stores"] if s["store_id"] == store_id), None)
+    if existing:
+        # 更新現有店家
+        existing["store_name"] = store_name
+        existing["set_by"] = set_by
+        existing["set_at"] = datetime.now().isoformat()
+    else:
+        # 新增店家
+        data["stores"].append({
+            "store_id": store_id,
+            "store_name": store_name,
+            "status": "open",
+            "set_by": set_by,
+            "set_at": datetime.now().isoformat()
+        })
+
+    # 向後相容：設定第一個店家為預設
+    if data["stores"]:
+        data["store_id"] = data["stores"][0]["store_id"]
+        data["store_name"] = data["stores"][0]["store_name"]
+
     write_json(DATA_DIR / "system" / "today.json", data)
     return data
 
 
-def get_jiaba_prompt() -> dict:
+def remove_today_store(store_id: str) -> dict:
+    """從今日列表移除店家"""
+    data = get_today_info()
+
+    if "stores" in data:
+        data["stores"] = [s for s in data["stores"] if s["store_id"] != store_id]
+
+        # 更新向後相容欄位
+        if data["stores"]:
+            data["store_id"] = data["stores"][0]["store_id"]
+            data["store_name"] = data["stores"][0]["store_name"]
+        else:
+            data["store_id"] = None
+            data["store_name"] = None
+
+    write_json(DATA_DIR / "system" / "today.json", data)
+    return data
+
+
+def get_jaba_prompt() -> dict:
     """取得 AI 系統提示詞"""
-    return read_json(DATA_DIR / "system" / "prompts" / "jiaba.json") or {}
+    return read_json(DATA_DIR / "system" / "prompts" / "jaba.json") or {}
 
 
 # === 店家管理 ===
@@ -181,16 +248,62 @@ def save_session_id(username: str, session_id: str) -> None:
 # === 訂單管理 ===
 
 def get_user_order(username: str, order_date: str = None) -> dict | None:
-    """取得使用者某日的訂單"""
+    """取得使用者某日的單一訂單（向後相容，取得最新一筆）"""
     if order_date is None:
         order_date = date.today().isoformat()
-    return read_json(DATA_DIR / "users" / username / "orders" / f"{order_date}.json")
+    # 先嘗試舊格式
+    old_format = read_json(DATA_DIR / "users" / username / "orders" / f"{order_date}.json")
+    if old_format:
+        return old_format
+    # 嘗試新格式（多訂單）
+    orders = get_user_orders(username, order_date)
+    return orders[-1] if orders else None
 
 
-def save_user_order(username: str, order: dict) -> None:
-    """儲存使用者訂單"""
+def get_user_orders(username: str, order_date: str = None) -> list[dict]:
+    """取得使用者某日的所有訂單"""
+    if order_date is None:
+        order_date = date.today().isoformat()
+    orders_dir = DATA_DIR / "users" / username / "orders"
+    if not orders_dir.exists():
+        return []
+
+    orders = []
+    # 舊格式：{date}.json
+    old_file = orders_dir / f"{order_date}.json"
+    if old_file.exists():
+        order = read_json(old_file)
+        if order:
+            orders.append(order)
+
+    # 新格式：{date}-{timestamp}.json
+    for f in orders_dir.glob(f"{order_date}-*.json"):
+        order = read_json(f)
+        if order:
+            orders.append(order)
+
+    # 按建立時間排序
+    orders.sort(key=lambda x: x.get("created_at", ""))
+    return orders
+
+
+def save_user_order(username: str, order: dict) -> str:
+    """儲存使用者訂單，回傳 order_id"""
     order_date = order.get("date", date.today().isoformat())
-    write_json(DATA_DIR / "users" / username / "orders" / f"{order_date}.json", order)
+    timestamp = datetime.now().strftime("%H%M%S%f")[:10]
+    order_id = f"{order_date}-{timestamp}"
+    order["order_id"] = order_id
+    write_json(DATA_DIR / "users" / username / "orders" / f"{order_id}.json", order)
+    return order_id
+
+
+def delete_user_order(username: str, order_id: str) -> bool:
+    """刪除使用者特定訂單"""
+    order_file = DATA_DIR / "users" / username / "orders" / f"{order_id}.json"
+    if order_file.exists():
+        order_file.unlink()
+        return True
+    return False
 
 
 def get_daily_summary(order_date: str = None) -> dict | None:
@@ -224,8 +337,10 @@ def save_payments(payments: dict) -> None:
 
 
 def update_daily_summary_with_order(username: str, order: dict) -> dict:
-    """用訂單更新每日彙整"""
+    """用訂單更新每日彙整（支援多訂單）"""
     order_date = order.get("date", date.today().isoformat())
+    order_id = order.get("order_id")
+
     summary = get_daily_summary(order_date) or {
         "date": order_date,
         "store_id": order.get("store_id"),
@@ -236,12 +351,19 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
         "updated_at": datetime.now().isoformat()
     }
 
-    # 移除該使用者舊訂單
-    summary["orders"] = [o for o in summary["orders"] if o["username"] != username]
+    # 如果有 order_id，用它來識別；否則用 username（向後相容）
+    if order_id:
+        summary["orders"] = [o for o in summary["orders"] if o.get("order_id") != order_id]
+    else:
+        # 舊邏輯：移除該使用者的訂單（只保留最新一筆）
+        summary["orders"] = [o for o in summary["orders"] if o["username"] != username]
 
     # 加入新訂單
     summary["orders"].append({
+        "order_id": order_id,
         "username": username,
+        "store_id": order.get("store_id"),
+        "store_name": order.get("store_name"),
         "items": order["items"],
         "total": order["total"]
     })
@@ -268,14 +390,17 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
         "total_pending": 0
     }
 
+    # 計算該使用者所有訂單的總金額
+    user_total = sum(o["total"] for o in summary["orders"] if o["username"] == username)
+
     # 更新或新增付款記錄
     existing = next((r for r in payments["records"] if r["username"] == username), None)
     if existing:
-        existing["amount"] = order["total"]
+        existing["amount"] = user_total
     else:
         payments["records"].append({
             "username": username,
-            "amount": order["total"],
+            "amount": user_total,
             "paid": False,
             "paid_at": None,
             "note": None
@@ -288,3 +413,39 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
     save_payments(payments)
 
     return summary
+
+
+# === 聊天功能 ===
+
+def get_chat_messages(chat_date: str = None) -> list[dict]:
+    """取得某日的聊天記錄"""
+    if chat_date is None:
+        chat_date = date.today().isoformat()
+    data = read_json(DATA_DIR / "chat" / f"{chat_date}.json")
+    if data:
+        return data.get("messages", [])
+    return []
+
+
+def save_chat_message(username: str, content: str) -> dict:
+    """儲存新的聊天訊息，回傳新訊息物件"""
+    chat_date = date.today().isoformat()
+    chat_file = DATA_DIR / "chat" / f"{chat_date}.json"
+
+    data = read_json(chat_file) or {
+        "date": chat_date,
+        "messages": []
+    }
+
+    # 建立新訊息
+    new_message = {
+        "id": f"{chat_date}-{len(data['messages']) + 1:04d}",
+        "username": username,
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    data["messages"].append(new_message)
+    write_json(chat_file, data)
+
+    return new_message

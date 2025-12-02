@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>jiaba - 訂餐</title>
+  <title>呷爸 - 訂餐</title>
+  <link rel="icon" type="image/png" href="/static/images/jaba.png">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
@@ -11,38 +12,309 @@
   <a href="/" class="back-link">← 返回看板</a>
 
   <div class="container">
-    <div class="chat-container">
-      <div class="chat-header">
-        <h1>🍱 jiaba 訂餐助手</h1>
+    <div class="order-page-layout">
+      <!-- 左側：對話區 -->
+      <div class="chat-container">
+        <div class="chat-header">
+          <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸訂餐助手</h1>
+        </div>
+
+        <!-- 名稱輸入 -->
+        <div class="name-input-container" id="name-input-section">
+          <h2>請輸入你的名字</h2>
+          <input type="text" id="username-input" placeholder="你的名字" autofocus>
+          <button class="btn btn-primary" onclick="startChat()">開始訂餐</button>
+        </div>
+
+        <!-- 對話區域 -->
+        <div class="chat-messages" id="chat-messages" style="display: none;">
+          <!-- 訊息會動態加入這裡 -->
+        </div>
+
+        <div class="chat-input" id="chat-input" style="display: none;">
+          <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="handleKeyPress(event)">
+          <button onclick="sendMessage()">發送</button>
+        </div>
       </div>
 
-      <!-- 名稱輸入 -->
-      <div class="name-input-container" id="name-input-section">
-        <h2>請輸入你的名字</h2>
-        <input type="text" id="username-input" placeholder="你的名字" autofocus>
-        <button class="btn btn-primary" onclick="startChat()">開始訂餐</button>
-      </div>
+      <!-- 右側：側邊面板 -->
+      <div class="side-panel" id="side-panel" style="display: none;">
+        <!-- 今日店家資訊 -->
+        <div class="panel-card store-info-panel">
+          <div class="panel-header">
+            <span>🏪</span>
+            <span>今日店家</span>
+          </div>
+          <div class="panel-content" id="store-info-content">
+            <div class="no-store-msg">尚未設定今日店家</div>
+          </div>
+        </div>
 
-      <!-- 對話區域 -->
-      <div class="chat-messages" id="chat-messages" style="display: none;">
-        <!-- 訊息會動態加入這裡 -->
-      </div>
+        <!-- 菜單面板 -->
+        <div class="panel-card menu-panel">
+          <div class="panel-header">
+            <span>📋</span>
+            <span>菜單</span>
+          </div>
+          <div class="panel-content" id="menu-content">
+            <div class="no-store-msg">請等待管理員設定今日店家</div>
+          </div>
+        </div>
 
-      <div class="chat-input" id="chat-input" style="display: none;">
-        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">發送</button>
+        <!-- 即時訂單面板 -->
+        <div class="panel-card orders-panel">
+          <div class="panel-header">
+            <span>📦</span>
+            <span>今日訂單</span>
+          </div>
+          <div class="panel-content" id="orders-content">
+            <div class="orders-empty">目前還沒有訂單</div>
+          </div>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 團隊聊天室 -->
+  <div class="team-chat minimized" id="team-chat">
+    <div class="team-chat-header" onclick="toggleTeamChat()">
+      <span class="team-chat-title">
+        <span>💬 團隊聊天室</span>
+        <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
+      </span>
+      <button class="team-chat-toggle" id="chat-toggle-btn">▲</button>
+    </div>
+    <div class="team-chat-messages" id="team-chat-messages">
+      <!-- 訊息會動態加入這裡 -->
+    </div>
+    <div class="team-chat-input">
+      <input type="text" id="team-chat-input" placeholder="輸入訊息..." onkeypress="handleTeamChatKeyPress(event)">
+      <button onclick="sendTeamChatMessage()">發送</button>
     </div>
   </div>
 
   <script>
     const socket = io();
     let username = '';
+    let todayInfo = null;
+    let todayMenu = null;
+    let todaySummary = null;
+
+    // === 瀏覽器通知 ===
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    function sendBrowserNotification(title, body, tag = null) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const options = {
+          body: body,
+          icon: '/static/images/jaba.png',
+          tag: tag || `jaba-${Date.now()}`,
+          requireInteraction: false
+        };
+
+        const notification = new Notification(title, options);
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+
+    // 頁面載入時請求通知權限
+    requestNotificationPermission();
 
     // 檢查 localStorage 是否有儲存的名字
-    const savedName = localStorage.getItem('jiaba_username');
+    const savedName = localStorage.getItem('jaba_username');
     if (savedName) {
       document.getElementById('username-input').value = savedName;
+    }
+
+    // === 今日資訊與菜單 ===
+    let todayStores = [];  // 多店家資料
+
+    async function loadTodayInfo() {
+      try {
+        const res = await fetch('/api/today');
+        const data = await res.json();
+        todayInfo = data.today;
+        todaySummary = data.summary;
+        todayStores = data.stores || [];
+
+        // 更新店家資訊面板（支援多店家）
+        updateStoreInfoPanel(data.today, data.stores);
+
+        // 更新菜單面板（支援多店家）
+        updateMenuPanel(data.stores);
+
+        // 更新訂單面板
+        updateOrdersPanel(data.summary);
+      } catch (err) {
+        console.error('載入今日資訊失敗:', err);
+      }
+    }
+
+    function updateStoreInfoPanel(today, stores) {
+      const content = document.getElementById('store-info-content');
+
+      // 支援多店家
+      if (stores && stores.length > 0) {
+        let html = '';
+        stores.forEach((storeData, index) => {
+          const store = storeData.store;
+          if (store) {
+            if (index > 0) html += '<div class="store-divider"></div>';
+            html += `<div class="store-title">${store.name}</div>`;
+            if (store.note) {
+              html += `<div class="store-note">${store.note}</div>`;
+            }
+          }
+        });
+        content.innerHTML = html || '<div class="no-store-msg">尚未設定今日店家</div>';
+        return;
+      }
+
+      // 向後相容：單店家
+      if (!today || !today.store_name) {
+        content.innerHTML = '<div class="no-store-msg">尚未設定今日店家</div>';
+        return;
+      }
+      content.innerHTML = `<div class="store-title">${today.store_name}</div>`;
+    }
+
+    function updateMenuPanel(stores) {
+      const content = document.getElementById('menu-content');
+
+      // 支援多店家
+      if (stores && stores.length > 0) {
+        let html = '';
+        stores.forEach((storeData, storeIndex) => {
+          const store = storeData.store;
+          const menu = storeData.menu;
+
+          if (store && menu && menu.categories) {
+            // 多店家時顯示店名標題
+            if (stores.length > 1) {
+              if (storeIndex > 0) html += '<div class="menu-store-divider"></div>';
+              html += `<div class="menu-store-title">🏪 ${store.name}</div>`;
+            }
+
+            menu.categories.forEach(category => {
+              html += `<div class="menu-category">`;
+              html += `<div class="menu-category-title">${category.name}</div>`;
+              category.items.forEach(item => {
+                const unavailableClass = item.available === false ? ' unavailable' : '';
+                const escapedName = item.name.replace(/'/g, "\\'");
+                html += `
+                  <div class="menu-item${unavailableClass}" onclick="quickOrder('${escapedName}', ${item.price}, '${store.id}')" title="${item.description || ''}">
+                    <span class="menu-item-name">${item.name}</span>
+                    <span class="menu-item-price">$${item.price}</span>
+                  </div>
+                `;
+              });
+              html += `</div>`;
+            });
+          }
+        });
+
+        content.innerHTML = html || '<div class="no-store-msg">暫無菜單資料</div>';
+        return;
+      }
+
+      content.innerHTML = '<div class="no-store-msg">請等待管理員設定今日店家</div>';
+    }
+
+    function updateOrdersPanel(summary) {
+      const content = document.getElementById('orders-content');
+      if (!summary || !summary.orders || summary.orders.length === 0) {
+        content.innerHTML = '<div class="orders-empty">目前還沒有訂單</div>';
+        return;
+      }
+
+      // 多店家時按店家分組
+      const hasMultipleStores = todayStores && todayStores.length > 1;
+      let html = '';
+
+      if (hasMultipleStores) {
+        // 按店家分組訂單
+        const ordersByStore = {};
+        summary.orders.forEach(order => {
+          const storeId = order.store_id || 'unknown';
+          if (!ordersByStore[storeId]) {
+            ordersByStore[storeId] = [];
+          }
+          ordersByStore[storeId].push(order);
+        });
+
+        // 依店家顯示
+        Object.keys(ordersByStore).forEach((storeId, index) => {
+          const orders = ordersByStore[storeId];
+          const storeName = orders[0]?.store_name || '未知店家';
+
+          if (index > 0) html += '<div class="orders-store-divider"></div>';
+          html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
+
+          orders.forEach(order => {
+            const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+            html += `
+              <div class="live-order-item">
+                <div>
+                  <div class="live-order-user">${order.username}</div>
+                  <div class="live-order-items">${itemsText}</div>
+                </div>
+                <div class="live-order-total">$${order.total}</div>
+              </div>
+            `;
+          });
+        });
+      } else {
+        // 單店家：直接列出
+        summary.orders.forEach(order => {
+          const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+          html += `
+            <div class="live-order-item">
+              <div>
+                <div class="live-order-user">${order.username}</div>
+                <div class="live-order-items">${itemsText}</div>
+              </div>
+              <div class="live-order-total">$${order.total}</div>
+            </div>
+          `;
+        });
+      }
+
+      // 加上總計
+      html += `
+        <div class="orders-summary">
+          <span class="orders-summary-label">總計 ${summary.orders.length} 份</span>
+          <span class="orders-summary-amount">$${summary.grand_total}</span>
+        </div>
+      `;
+      content.innerHTML = html;
+    }
+
+    // 快速點餐：點擊菜單項目
+    function quickOrder(itemName, price, storeId) {
+      if (!username) {
+        alert('請先輸入名字');
+        return;
+      }
+      const input = document.getElementById('message-input');
+      // 如果有多店家，加入店家資訊
+      if (todayStores.length > 1 && storeId) {
+        const store = todayStores.find(s => s.store && s.store.id === storeId);
+        if (store) {
+          input.value = `我要在${store.store.name}點 ${itemName}`;
+        } else {
+          input.value = `我要點 ${itemName}`;
+        }
+      } else {
+        input.value = `我要點 ${itemName}`;
+      }
+      input.focus();
     }
 
     // 開始對話
@@ -56,15 +328,31 @@
       }
 
       // 儲存名字到 localStorage
-      localStorage.setItem('jiaba_username', username);
+      localStorage.setItem('jaba_username', username);
 
-      // 隱藏名稱輸入，顯示對話區域
+      // 隱藏名稱輸入，顯示對話區域和側邊面板
       document.getElementById('name-input-section').style.display = 'none';
       document.getElementById('chat-messages').style.display = 'block';
       document.getElementById('chat-input').style.display = 'flex';
+      document.getElementById('side-panel').style.display = 'flex';
 
-      // 顯示歡迎訊息
-      addMessage('assistant', `嗨 ${username}！我是 jiaba，今天想吃什麼呢？\n\n你可以問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n• 查詢我的訂單`);
+      // 載入今日資訊
+      loadTodayInfo();
+
+      // 根據今日店家顯示不同的歡迎訊息
+      let welcomeMsg = `嗨 ${username}！我是呷爸，今天想吃什麼呢？\n\n`;
+      // 支援多店家
+      if (todayStores && todayStores.length > 1) {
+        const storeNames = todayStores.map(s => s.store?.name).filter(Boolean).join('、');
+        welcomeMsg += `今天有 ${todayStores.length} 家店可以選：${storeNames}。\n`;
+        welcomeMsg += `你可以直接點右邊菜單上的品項，或是告訴我你想點什麼！`;
+      } else if (todayInfo && todayInfo.store_name) {
+        welcomeMsg += `今天的店家是「${todayInfo.store_name}」，`;
+        welcomeMsg += `你可以直接點右邊菜單上的品項，或是告訴我你想點什麼！`;
+      } else {
+        welcomeMsg += `你可以問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n• 查詢我的訂單`;
+      }
+      addMessage('assistant', welcomeMsg);
 
       document.getElementById('message-input').focus();
     }
@@ -137,7 +425,17 @@
       const msgEl = document.createElement('div');
       msgEl.id = id;
       msgEl.className = `message ${role}`;
-      msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+
+      if (role === 'assistant') {
+        msgEl.innerHTML = `
+          <div class="message-avatar">
+            <img src="/static/images/jaba.png" alt="呷爸" class="avatar-icon">
+          </div>
+          <div class="message-content">${content.replace(/\n/g, '<br>')}</div>
+        `;
+      } else {
+        msgEl.innerHTML = `<div class="message-content">${content.replace(/\n/g, '<br>')}</div>`;
+      }
 
       messagesEl.appendChild(msgEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -147,9 +445,43 @@
 
     // 監聽訂單事件
     socket.on('order_created', (data) => {
+      // 更新訂單面板
+      if (data.summary) {
+        updateOrdersPanel(data.summary);
+      }
       if (data.username !== username) {
         showNotification(`${data.username} 也訂了便當！`);
+        sendBrowserNotification('新訂單', `${data.username} 訂了便當！`, 'order-created');
       }
+    });
+
+    socket.on('order_cancelled', (data) => {
+      // 更新訂單面板
+      if (data.summary) {
+        updateOrdersPanel(data.summary);
+      } else {
+        // 如果沒帶 summary，重新載入
+        loadTodayInfo();
+      }
+      if (data.username !== username) {
+        showNotification(`${data.username} 取消了訂單`);
+        sendBrowserNotification('訂單取消', `${data.username} 取消了訂單`, 'order-cancelled');
+      }
+    });
+
+    socket.on('orders_cleared', (data) => {
+      // 清空訂單面板
+      updateOrdersPanel(null);
+      showNotification('管理員已清除所有訂單');
+      sendBrowserNotification('訂單清除', '管理員已清除所有訂單', 'orders-cleared');
+    });
+
+    socket.on('store_changed', (data) => {
+      const storeName = data.store_name || '新店家';
+      // 重新載入今日資訊（包括新菜單）
+      loadTodayInfo();
+      showNotification(`今日店家已更新：${storeName}`);
+      sendBrowserNotification('店家更新', `今日店家已更新：${storeName}`, 'store-changed');
     });
 
     function showNotification(message) {
@@ -164,6 +496,126 @@
     document.getElementById('username-input').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') startChat();
     });
+
+    // === 團隊聊天室 ===
+    let teamChatOpen = false;
+    let unreadCount = 0;
+
+    // 切換聊天室展開/收起
+    function toggleTeamChat() {
+      const chatEl = document.getElementById('team-chat');
+      teamChatOpen = !teamChatOpen;
+
+      if (teamChatOpen) {
+        chatEl.classList.remove('minimized');
+        document.getElementById('chat-toggle-btn').textContent = '▼';
+        // 清除未讀數
+        unreadCount = 0;
+        updateUnreadBadge();
+        // 捲動到最新訊息
+        const messagesEl = document.getElementById('team-chat-messages');
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else {
+        chatEl.classList.add('minimized');
+        document.getElementById('chat-toggle-btn').textContent = '▲';
+      }
+    }
+
+    // 更新未讀徽章
+    function updateUnreadBadge() {
+      const badge = document.getElementById('unread-badge');
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    // 處理 Enter 鍵發送團隊訊息
+    function handleTeamChatKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendTeamChatMessage();
+      }
+    }
+
+    // 發送團隊聊天訊息
+    async function sendTeamChatMessage() {
+      const input = document.getElementById('team-chat-input');
+      const content = input.value.trim();
+
+      if (!content || !username) return;
+
+      input.value = '';
+
+      try {
+        await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, content })
+        });
+      } catch (err) {
+        console.error('發送訊息失敗:', err);
+      }
+    }
+
+    // 添加團隊聊天訊息到畫面
+    function addTeamChatMessage(msg) {
+      const messagesEl = document.getElementById('team-chat-messages');
+      const isOwn = msg.username === username;
+
+      const msgEl = document.createElement('div');
+      msgEl.className = `team-chat-message ${isOwn ? 'own' : ''}`;
+
+      const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      msgEl.innerHTML = `
+        <div class="team-chat-message-header">
+          <span class="team-chat-message-user">${msg.username}</span>
+          <span class="team-chat-message-time">${time}</span>
+        </div>
+        <div class="team-chat-message-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      `;
+
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // 載入歷史聊天訊息
+    async function loadChatHistory() {
+      try {
+        const res = await fetch('/api/chat/messages');
+        const data = await res.json();
+
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach(msg => addTeamChatMessage(msg));
+        }
+      } catch (err) {
+        console.error('載入聊天記錄失敗:', err);
+      }
+    }
+
+    // 監聽團隊聊天訊息
+    socket.on('chat_message', (msg) => {
+      addTeamChatMessage(msg);
+
+      // 如果不是自己的訊息
+      if (msg.username !== username) {
+        // 聊天室收起時增加未讀數
+        if (!teamChatOpen) {
+          unreadCount++;
+          updateUnreadBadge();
+        }
+        // 發送瀏覽器通知
+        sendBrowserNotification(msg.username, msg.content, `chat-${msg.id}`);
+      }
+    });
+
+    // 頁面載入時載入聊天記錄
+    loadChatHistory();
   </script>
 </body>
 </html>

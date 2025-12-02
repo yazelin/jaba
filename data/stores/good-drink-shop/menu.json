@@ -1,0 +1,358 @@
+{
+  "store_id": "good-drink-shop",
+  "updated_at": "2025-12-02T23:45:45.778251",
+  "categories": [
+    {
+      "name": "功夫．好茶",
+      "items": [
+        {
+          "id": "item-0-0",
+          "name": "功夫茶王",
+          "price": 45,
+          "description": "L瓶",
+          "available": true
+        },
+        {
+          "id": "item-0-1",
+          "name": "岩葉紅茶",
+          "price": 35,
+          "description": "M 35 / L 55",
+          "available": true
+        },
+        {
+          "id": "item-0-2",
+          "name": "蜜玉綠茶",
+          "price": 35,
+          "description": "M 35 / L 55",
+          "available": true
+        },
+        {
+          "id": "item-0-3",
+          "name": "四季春青茶",
+          "price": 35,
+          "description": "M 35 / L 55",
+          "available": true
+        },
+        {
+          "id": "item-0-4",
+          "name": "烏龍觀音茶",
+          "price": 35,
+          "description": "M 35 / L 55",
+          "available": true
+        },
+        {
+          "id": "item-0-5",
+          "name": "蜜桃凍頂紅茶",
+          "price": 40,
+          "description": "M 40 / L 60",
+          "available": true
+        },
+        {
+          "id": "item-0-6",
+          "name": "手作冬瓜茶",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-7",
+          "name": "阿里山冰茶",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-8",
+          "name": "日月潭紅茶",
+          "price": 0,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "瓶裝回購紅綠青鐵折抵10元",
+      "items": [
+        {
+          "id": "item-1-0",
+          "name": "芝士奶蓋綠茶/青茶",
+          "price": 0,
+          "description": "Cheese Foam Green Tea/Jin Xuan Oolong Tea",
+          "available": true
+        },
+        {
+          "id": "item-1-1",
+          "name": "芝士奶蓋紅茶/烏龍",
+          "price": 0,
+          "description": "Cheese Foam Black Tea/Oolong",
+          "available": true
+        },
+        {
+          "id": "item-1-2",
+          "name": "玫瑰冰茶",
+          "price": 0,
+          "description": "Rose Oolong Tea",
+          "available": true
+        },
+        {
+          "id": "item-1-3",
+          "name": "青梅綠茶",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-4",
+          "name": "多多綠茶",
+          "price": 0,
+          "description": "Yakult Green Tea",
+          "available": true
+        },
+        {
+          "id": "item-1-5",
+          "name": "脆脆多多",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-6",
+          "name": "粉嫩胭脂紅",
+          "price": 0,
+          "description": "Peach Black Tea w/ Basil",
+          "available": true
+        },
+        {
+          "id": "item-1-7",
+          "name": "冰淇淋岩葉紅茶",
+          "price": 60,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "功夫．鮮奶",
+      "items": [
+        {
+          "id": "item-2-0",
+          "name": "黑糖波霸鮮奶",
+          "price": 65,
+          "description": "M 65 / L 80",
+          "available": true
+        },
+        {
+          "id": "item-2-1",
+          "name": "紅豆粉粿鮮奶",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-2",
+          "name": "巧克力鮮奶",
+          "price": 75,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-3",
+          "name": "岩葉紅茶拿鐵",
+          "price": 0,
+          "description": "Oolong Tea Latte",
+          "available": true
+        },
+        {
+          "id": "item-2-4",
+          "name": "烏龍觀音拿鐵",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-5",
+          "name": "英式伯爵拿鐵",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-6",
+          "name": "蜜桃胭脂拿鐵",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-7",
+          "name": "冰淇淋紅茶拿鐵",
+          "price": 0,
+          "description": "Ice Cream Black Tea Latte",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "功夫．奶茶",
+      "items": [
+        {
+          "id": "item-3-0",
+          "name": "38奶霸",
+          "price": 0,
+          "description": "38 Milk King",
+          "available": true
+        },
+        {
+          "id": "item-3-1",
+          "name": "黑糖波霸奶茶",
+          "price": 55,
+          "description": "M 55 / L 60",
+          "available": true
+        },
+        {
+          "id": "item-3-2",
+          "name": "咖啡凍奶茶",
+          "price": 0,
+          "description": "Coffee Jelly Milk Tea",
+          "available": true
+        },
+        {
+          "id": "item-3-3",
+          "name": "厚奶茶/奶綠",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-4",
+          "name": "烏龍觀音奶茶",
+          "price": 50,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-5",
+          "name": "英式伯爵奶茶",
+          "price": 50,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-6",
+          "name": "蜜桃胭脂奶茶",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-7",
+          "name": "莊園玫瑰奶茶",
+          "price": 0,
+          "description": "Rose Milk Tea",
+          "available": true
+        },
+        {
+          "id": "item-3-8",
+          "name": "巧克力奶茶",
+          "price": 0,
+          "description": "Chocolate Milk Tea",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "期間．限定",
+      "items": [
+        {
+          "id": "item-4-0",
+          "name": "星桃樂脆脆",
+          "price": 75,
+          "description": "Star Fruit Grape Black Tea",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "功夫．水果",
+      "items": [
+        {
+          "id": "item-5-0",
+          "name": "輕飲水果茶王",
+          "price": 0,
+          "description": "Signature Lite Fruit Tea",
+          "available": true
+        },
+        {
+          "id": "item-5-1",
+          "name": "寒天柚香飲",
+          "price": 0,
+          "description": "Pomelo w/ Agar Bubble",
+          "available": true
+        },
+        {
+          "id": "item-5-2",
+          "name": "柚檸柚香綠",
+          "price": 0,
+          "description": "Grapefruit Green Tea w/ Jelly",
+          "available": true
+        },
+        {
+          "id": "item-5-3",
+          "name": "鮮檸檬綠",
+          "price": 65,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-5-4",
+          "name": "芭樂檸檬綠",
+          "price": 70,
+          "description": "Guava Lemon Green Tea",
+          "available": true
+        },
+        {
+          "id": "item-5-5",
+          "name": "黃金芒果綠",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-5-6",
+          "name": "百香3Q",
+          "price": 0,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-5-7",
+          "name": "蔓越莓凍子",
+          "price": 0,
+          "description": "Passion w/ Basil Seeds",
+          "available": true
+        },
+        {
+          "id": "item-5-8",
+          "name": "冬瓜檸檬",
+          "price": 0,
+          "description": "Melon Lemon",
+          "available": true
+        },
+        {
+          "id": "item-5-9",
+          "name": "黃金芒果莎莎",
+          "price": 0,
+          "description": "Mango Slush",
+          "available": true
+        },
+        {
+          "id": "item-5-10",
+          "name": "泰式榴槤莎莎",
+          "price": 110,
+          "description": "Durian Sesa Slush",
+          "available": true
+        }
+      ]
+    }
+  ]
+}

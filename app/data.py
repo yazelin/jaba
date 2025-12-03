@@ -151,6 +151,22 @@ def get_jaba_prompt() -> dict:
     return read_json(DATA_DIR / "system" / "prompts" / "jaba.json") or {}
 
 
+def get_ai_config() -> dict:
+    """取得 AI 設定"""
+    default_config = {
+        "chat": {"model": "haiku"},
+        "menu_recognition": {"model": "sonnet"}
+    }
+    config = read_json(DATA_DIR / "system" / "ai_config.json")
+    if config:
+        # 合併預設值
+        for key in default_config:
+            if key not in config:
+                config[key] = default_config[key]
+        return config
+    return default_config
+
+
 # === 店家管理 ===
 
 def get_stores() -> list[dict]:
@@ -228,21 +244,34 @@ def get_users() -> list[dict]:
     return users
 
 
-def get_session_id(username: str) -> str | None:
-    """取得使用者今日的 session ID"""
+def get_session_id(username: str, is_manager: bool = False) -> str | None:
+    """取得使用者今日的 session ID（管理員和一般模式分開）"""
     today = date.today().isoformat()
-    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}.txt"
+    suffix = "-manager" if is_manager else ""
+    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
     if session_file.exists():
         return session_file.read_text().strip()
     return None
 
 
-def save_session_id(username: str, session_id: str) -> None:
-    """儲存使用者今日的 session ID"""
+def save_session_id(username: str, session_id: str, is_manager: bool = False) -> None:
+    """儲存使用者今日的 session ID（管理員和一般模式分開）"""
     today = date.today().isoformat()
+    suffix = "-manager" if is_manager else ""
     session_dir = DATA_DIR / "users" / username / "sessions"
     session_dir.mkdir(parents=True, exist_ok=True)
-    (session_dir / f"{today}.txt").write_text(session_id)
+    (session_dir / f"{today}{suffix}.txt").write_text(session_id)
+
+
+def clear_session_id(username: str, is_manager: bool = False) -> bool:
+    """清除使用者今日的 session ID（用於重新開始對話）"""
+    today = date.today().isoformat()
+    suffix = "-manager" if is_manager else ""
+    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
+    if session_file.exists():
+        session_file.unlink()
+        return True
+    return False
 
 
 # === 訂單管理 ===

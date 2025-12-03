@@ -1,0 +1,156 @@
+{
+  "store_id": "jiaxiangwei-bento",
+  "updated_at": "2025-12-03T09:53:03.450104",
+  "categories": [
+    {
+      "name": "便當",
+      "items": [
+        {
+          "id": "item-0-0",
+          "name": "炸雞腿",
+          "price": 125,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-1",
+          "name": "古早味排骨",
+          "price": 110,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-2",
+          "name": "卡啦雞",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-3",
+          "name": "高粱酒香腸",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-4",
+          "name": "蔥爆豬",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-5",
+          "name": "紅糟肉",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-6",
+          "name": "鯖魚便當",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-7",
+          "name": "鱈魚飯",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-8",
+          "name": "鹹豬肉",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-9",
+          "name": "蔥油雞",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-10",
+          "name": "宮保雞丁",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        },
+        {
+          "id": "item-0-11",
+          "name": "紅燒焢肉",
+          "price": 105,
+          "description": "附湯或多多",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "單點類",
+      "items": [
+        {
+          "id": "item-1-0",
+          "name": "炸雞腿",
+          "price": 80,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-1",
+          "name": "卡啦雞",
+          "price": 60,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-2",
+          "name": "鯖魚",
+          "price": 60,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-3",
+          "name": "鱈魚",
+          "price": 60,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-4",
+          "name": "古早味排骨",
+          "price": 70,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-5",
+          "name": "高粱酒香腸",
+          "price": 35,
+          "description": "1條35元，1斤200元",
+          "available": true
+        },
+        {
+          "id": "item-1-6",
+          "name": "紅糟肉",
+          "price": 60,
+          "description": "1份60元",
+          "available": true
+        },
+        {
+          "id": "item-1-7",
+          "name": "鹹豬肉",
+          "price": 60,
+          "description": "1份60元",
+          "available": true
+        }
+      ]
+    }
+  ]
+}

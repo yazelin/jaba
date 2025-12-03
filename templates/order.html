@@ -11,9 +11,34 @@
 <body>
   <a href="/" class="back-link">← 返回看板</a>
 
-  <div class="container">
-    <div class="order-page-layout">
-      <!-- 左側：對話區 -->
+  <div class="container order-container">
+    <div class="order-three-columns">
+      <!-- 左側：店家與菜單 -->
+      <div class="order-left-panel" id="left-panel" style="display: none;">
+        <!-- 今日店家資訊 -->
+        <div class="panel-card store-info-panel">
+          <div class="panel-header">
+            <span>🏪</span>
+            <span>今日店家</span>
+          </div>
+          <div class="panel-content" id="store-info-content">
+            <div class="no-store-msg">尚未設定今日店家</div>
+          </div>
+        </div>
+
+        <!-- 菜單面板 -->
+        <div class="panel-card menu-panel">
+          <div class="panel-header">
+            <span>📋</span>
+            <span>菜單</span>
+          </div>
+          <div class="panel-content" id="menu-content">
+            <div class="no-store-msg">請等待管理員設定今日店家</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中間：對話區 -->
       <div class="chat-container">
         <div class="chat-header">
           <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸訂餐助手</h1>
@@ -37,37 +62,26 @@
         </div>
       </div>
 
-      <!-- 右側：側邊面板 -->
-      <div class="side-panel" id="side-panel" style="display: none;">
-        <!-- 今日店家資訊 -->
-        <div class="panel-card store-info-panel">
-          <div class="panel-header">
-            <span>🏪</span>
-            <span>今日店家</span>
-          </div>
-          <div class="panel-content" id="store-info-content">
-            <div class="no-store-msg">尚未設定今日店家</div>
-          </div>
-        </div>
-
-        <!-- 菜單面板 -->
-        <div class="panel-card menu-panel">
-          <div class="panel-header">
-            <span>📋</span>
-            <span>菜單</span>
-          </div>
-          <div class="panel-content" id="menu-content">
-            <div class="no-store-msg">請等待管理員設定今日店家</div>
-          </div>
-        </div>
-
-        <!-- 即時訂單面板 -->
+      <!-- 右側：訂單面板 -->
+      <div class="order-right-panel" id="right-panel" style="display: none;">
+        <!-- 我的訂單面板 -->
         <div class="panel-card orders-panel">
           <div class="panel-header">
             <span>📦</span>
-            <span>今日訂單</span>
+            <span>我的訂單</span>
           </div>
-          <div class="panel-content" id="orders-content">
+          <div class="panel-content" id="my-orders-content">
+            <div class="orders-empty">你還沒有訂餐</div>
+          </div>
+        </div>
+
+        <!-- 大家的訂單面板 -->
+        <div class="panel-card orders-panel">
+          <div class="panel-header">
+            <span>📋</span>
+            <span>大家的訂單</span>
+          </div>
+          <div class="panel-content" id="all-orders-content">
             <div class="orders-empty">目前還沒有訂單</div>
           </div>
         </div>
@@ -76,13 +90,13 @@
   </div>
 
   <!-- 團隊聊天室 -->
-  <div class="team-chat minimized" id="team-chat">
+  <div class="team-chat" id="team-chat">
     <div class="team-chat-header" onclick="toggleTeamChat()">
       <span class="team-chat-title">
         <span>💬 團隊聊天室</span>
         <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
       </span>
-      <button class="team-chat-toggle" id="chat-toggle-btn">▲</button>
+      <button class="team-chat-toggle" id="chat-toggle-btn">▼</button>
     </div>
     <div class="team-chat-messages" id="team-chat-messages">
       <!-- 訊息會動態加入這裡 -->
@@ -228,7 +242,101 @@
     }
 
     function updateOrdersPanel(summary) {
-      const content = document.getElementById('orders-content');
+      // 更新「我的訂單」面板
+      updateMyOrdersPanel(summary);
+      // 更新「大家的訂單」面板
+      updateAllOrdersPanel(summary);
+    }
+
+    function updateMyOrdersPanel(summary) {
+      const content = document.getElementById('my-orders-content');
+      if (!summary || !summary.orders) {
+        content.innerHTML = '<div class="orders-empty">你還沒有訂餐</div>';
+        return;
+      }
+
+      // 過濾只顯示當前使用者的訂單
+      const myOrders = summary.orders.filter(order => order.username === username);
+      if (myOrders.length === 0) {
+        content.innerHTML = '<div class="orders-empty">你還沒有訂餐</div>';
+        return;
+      }
+
+      // 多店家時按店家分組
+      const hasMultipleStores = todayStores && todayStores.length > 1;
+      let html = '';
+      let myTotal = 0;
+      let myTotalCalories = 0;
+
+      if (hasMultipleStores) {
+        // 按店家分組訂單
+        const ordersByStore = {};
+        myOrders.forEach(order => {
+          const storeId = order.store_id || 'unknown';
+          if (!ordersByStore[storeId]) {
+            ordersByStore[storeId] = [];
+          }
+          ordersByStore[storeId].push(order);
+          myTotal += order.total;
+          myTotalCalories += order.total_calories || 0;
+        });
+
+        // 依店家顯示
+        Object.keys(ordersByStore).forEach((storeId, index) => {
+          const orders = ordersByStore[storeId];
+          const storeName = orders[0]?.store_name || '未知店家';
+
+          if (index > 0) html += '<div class="orders-store-divider"></div>';
+          html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
+
+          orders.forEach(order => {
+            order.items.forEach(item => {
+              const itemCalories = item.calories ? ` (${item.calories}大卡)` : '';
+              const itemQty = item.quantity > 1 ? ` x${item.quantity}` : '';
+              html += `
+                <div class="live-order-item">
+                  <div>
+                    <div class="live-order-items">${item.name}${itemQty}${itemCalories}</div>
+                  </div>
+                  <div class="live-order-total">$${item.price * item.quantity}</div>
+                </div>
+              `;
+            });
+          });
+        });
+      } else {
+        // 單店家：直接列出
+        myOrders.forEach(order => {
+          myTotal += order.total;
+          myTotalCalories += order.total_calories || 0;
+          order.items.forEach(item => {
+            const itemCalories = item.calories ? ` (${item.calories}大卡)` : '';
+            const itemQty = item.quantity > 1 ? ` x${item.quantity}` : '';
+            html += `
+              <div class="live-order-item">
+                <div>
+                  <div class="live-order-items">${item.name}${itemQty}${itemCalories}</div>
+                </div>
+                <div class="live-order-total">$${item.price * item.quantity}</div>
+              </div>
+            `;
+          });
+        });
+      }
+
+      // 加上總計（含卡路里）
+      const caloriesText = myTotalCalories > 0 ? ` / ${myTotalCalories}大卡` : '';
+      html += `
+        <div class="orders-summary">
+          <span class="orders-summary-label">共 ${myOrders.length} 筆${caloriesText}</span>
+          <span class="orders-summary-amount">$${myTotal}</span>
+        </div>
+      `;
+      content.innerHTML = html;
+    }
+
+    function updateAllOrdersPanel(summary) {
+      const content = document.getElementById('all-orders-content');
       if (!summary || !summary.orders || summary.orders.length === 0) {
         content.innerHTML = '<div class="orders-empty">目前還沒有訂單</div>';
         return;
@@ -330,11 +438,12 @@
       // 儲存名字到 localStorage
       localStorage.setItem('jaba_username', username);
 
-      // 隱藏名稱輸入，顯示對話區域和側邊面板
+      // 隱藏名稱輸入，顯示對話區域和左右面板
       document.getElementById('name-input-section').style.display = 'none';
       document.getElementById('chat-messages').style.display = 'block';
       document.getElementById('chat-input').style.display = 'flex';
-      document.getElementById('side-panel').style.display = 'flex';
+      document.getElementById('left-panel').style.display = 'flex';
+      document.getElementById('right-panel').style.display = 'flex';
 
       // 載入今日資訊
       loadTodayInfo();
@@ -345,10 +454,12 @@
       if (todayStores && todayStores.length > 1) {
         const storeNames = todayStores.map(s => s.store?.name).filter(Boolean).join('、');
         welcomeMsg += `今天有 ${todayStores.length} 家店可以選：${storeNames}。\n`;
-        welcomeMsg += `你可以直接點右邊菜單上的品項，或是告訴我你想點什麼！`;
+        welcomeMsg += `你可以直接點左邊菜單上的品項，或是告訴我你想點什麼！\n\n`;
+        welcomeMsg += `不知道吃什麼？可以問我「今天吃什麼好？」`;
       } else if (todayInfo && todayInfo.store_name) {
         welcomeMsg += `今天的店家是「${todayInfo.store_name}」，`;
-        welcomeMsg += `你可以直接點右邊菜單上的品項，或是告訴我你想點什麼！`;
+        welcomeMsg += `你可以直接點左邊菜單上的品項，或是告訴我你想點什麼！\n\n`;
+        welcomeMsg += `不知道吃什麼？可以問我「今天吃什麼好？」`;
       } else {
         welcomeMsg += `你可以問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n• 查詢我的訂單`;
       }
@@ -498,7 +609,7 @@
     });
 
     // === 團隊聊天室 ===
-    let teamChatOpen = false;
+    let teamChatOpen = true;  // 預設展開
     let unreadCount = 0;
 
     // 切換聊天室展開/收起

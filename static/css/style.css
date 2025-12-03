@@ -539,15 +539,15 @@ body::before {
   position: absolute;
   top: 20px;
   left: 20px;
-  color: white;
+  color: #8B4513;
   text-decoration: none;
   font-size: 1.1em;
-  opacity: 0.8;
-  transition: opacity 0.3s;
+  font-weight: 500;
+  transition: color 0.3s;
 }
 
 .back-link:hover {
-  opacity: 1;
+  color: #5D2E0C;
 }
 
 /* 空狀態 */
@@ -754,7 +754,7 @@ body::before {
   margin-left: 8px;
 }
 
-/* 訂餐頁面佈局 */
+/* 訂餐頁面佈局 - 舊版兩欄（保留向後相容） */
 .order-page-layout {
   display: flex;
   gap: 20px;
@@ -765,6 +765,58 @@ body::before {
   flex: 1;
   min-width: 0;
   margin-top: 0;
+}
+
+/* 訂餐頁面三欄佈局 */
+.order-three-columns {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 40px);
+}
+
+.order-left-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  overflow: hidden;
+}
+
+.order-left-panel .store-info-panel {
+  flex-shrink: 0;
+}
+
+.order-left-panel .menu-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.order-left-panel .menu-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none !important;
+}
+
+.order-left-panel .store-info-panel .panel-content {
+  max-height: none !important;
+}
+
+.order-three-columns .chat-container {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.order-right-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  overflow-y: auto;
 }
 
 /* 側邊菜單面板 */
@@ -1201,6 +1253,81 @@ body::before {
   font-size: 0.9em;
 }
 
+/* ========================================
+   管理員頁面三欄佈局
+   ======================================== */
+
+.admin-container {
+  max-width: 1600px;
+}
+
+/* 訂餐頁也使用寬版容器 */
+.order-container {
+  max-width: 1600px;
+}
+
+.admin-three-columns {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 40px);
+}
+
+.admin-left-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-left-panel .stores-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.admin-left-panel .stores-panel-content {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.admin-three-columns .chat-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-right-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  overflow-y: auto;
+}
+
+/* 菜單上傳按鈕 - 明顯樣式 */
+.menu-upload-btn {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 10px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #8B6914 0%, #A67B5B 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.menu-upload-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(139, 105, 20, 0.4);
+}
+
 /* RWD */
 @media (max-width: 768px) {
   .board-title {
@@ -1261,6 +1388,66 @@ body::before {
 
   .menu-panel .panel-content {
     max-height: 250px;
+  }
+
+  /* 管理員頁面 RWD */
+  .admin-three-columns {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 40px);
+  }
+
+  .admin-left-panel,
+  .admin-right-panel {
+    width: 100%;
+  }
+
+  .admin-left-panel {
+    order: 2;
+  }
+
+  .admin-left-panel .stores-panel-content {
+    max-height: 300px;
+  }
+
+  .admin-three-columns .chat-container {
+    order: 1;
+    height: 50vh;
+    min-height: 350px;
+  }
+
+  .admin-right-panel {
+    order: 3;
+  }
+
+  /* 訂餐頁三欄 RWD */
+  .order-three-columns {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 40px);
+  }
+
+  .order-left-panel,
+  .order-right-panel {
+    width: 100%;
+  }
+
+  .order-left-panel {
+    order: 2;
+  }
+
+  .order-left-panel .menu-panel .panel-content {
+    max-height: 250px;
+  }
+
+  .order-three-columns .chat-container {
+    order: 1;
+    height: 50vh;
+    min-height: 350px;
+  }
+
+  .order-right-panel {
+    order: 3;
   }
 }
 

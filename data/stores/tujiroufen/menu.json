@@ -1,0 +1,302 @@
+{
+  "store_id": "tujiroufen",
+  "updated_at": "2025-12-03T10:05:51.556053",
+  "categories": [
+    {
+      "name": "便當類",
+      "items": [
+        {
+          "id": "item-0-0",
+          "name": "雞腿飯",
+          "price": 120,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-1",
+          "name": "雞肉飯",
+          "price": 110,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-2",
+          "name": "雞翅飯",
+          "price": 110,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-3",
+          "name": "黯然飯",
+          "price": 95,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-4",
+          "name": "雞滷飯",
+          "price": 85,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-5",
+          "name": "銷魂飯",
+          "price": 70,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-6",
+          "name": "雙響銷魂飯",
+          "price": 105,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-0-7",
+          "name": "燒肉飯",
+          "price": 95,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "套餐",
+      "items": [
+        {
+          "id": "item-1-0",
+          "name": "雙人套餐",
+          "price": 320,
+          "description": "雞油飯x2、大份雞腿x1、荷包蛋或糖心蛋x2、雞絲或白菜x1、湯品x2",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "去骨雞肉切盤",
+      "items": [
+        {
+          "id": "item-2-0",
+          "name": "雞腿(小)",
+          "price": 100,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-1",
+          "name": "雞腿(大)",
+          "price": 195,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-2",
+          "name": "雞肉(小)",
+          "price": 80,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-3",
+          "name": "雞肉(大)",
+          "price": 155,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "湯類",
+      "items": [
+        {
+          "id": "item-3-0",
+          "name": "鴨肉丸湯",
+          "price": 35,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-1",
+          "name": "下水湯",
+          "price": 35,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-3-2",
+          "name": "竹筍湯",
+          "price": 35,
+          "description": "夏季限定",
+          "available": true
+        },
+        {
+          "id": "item-3-3",
+          "name": "味增湯",
+          "price": 35,
+          "description": "冬季限定",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "其他",
+      "items": [
+        {
+          "id": "item-4-0",
+          "name": "雞油飯",
+          "price": 15,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-1",
+          "name": "雞絲飯",
+          "price": 40,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-2",
+          "name": "滷肉飯",
+          "price": 40,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-3",
+          "name": "白飯",
+          "price": 10,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-4",
+          "name": "滷白菜",
+          "price": 40,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-5",
+          "name": "滷筍絲",
+          "price": 40,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-6",
+          "name": "高麗菜",
+          "price": 35,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-7",
+          "name": "油豆腐",
+          "price": 25,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-8",
+          "name": "豆干",
+          "price": 25,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-9",
+          "name": "海帶",
+          "price": 25,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-10",
+          "name": "荷包蛋",
+          "price": 15,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-11",
+          "name": "糖心蛋",
+          "price": 25,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-12",
+          "name": "燒肉",
+          "price": 55,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-13",
+          "name": "雞翅",
+          "price": 40,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-14",
+          "name": "雞爪",
+          "price": 5,
+          "description": "1支",
+          "available": true
+        },
+        {
+          "id": "item-4-15",
+          "name": "七里香",
+          "price": 5,
+          "description": "1顆",
+          "available": true
+        },
+        {
+          "id": "item-4-16",
+          "name": "鳳爪",
+          "price": 55,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-4-17",
+          "name": "豬頭皮",
+          "price": 55,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "全雞帶骨切盤",
+      "items": [
+        {
+          "id": "item-5-0",
+          "name": "全雞",
+          "price": 650,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-5-1",
+          "name": "半雞",
+          "price": 350,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-5-2",
+          "name": "三牲(魚、三層、全雞)",
+          "price": 1200,
+          "description": "",
+          "available": true
+        }
+      ]
+    }
+  ]
+}

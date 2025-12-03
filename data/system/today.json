@@ -2,13 +2,13 @@
   "date": "2025-12-03",
   "stores": [
     {
-      "store_id": "delicious-bento",
-      "store_name": "美味便當",
+      "store_id": "coco",
+      "store_name": "CoCo都可茶飲",
       "status": "open",
       "set_by": "管理員",
-      "set_at": "2025-12-03T00:07:58.372791"
+      "set_at": "2025-12-03T14:12:51.829720"
     }
   ],
-  "store_id": "delicious-bento",
-  "store_name": "美味便當"
+  "store_id": "coco",
+  "store_name": "CoCo都可茶飲"
 }

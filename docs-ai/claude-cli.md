@@ -1,6 +1,6 @@
 # Claude Code CLI 使用指南
 
-> 版本: 2.0.56
+> 版本: 2.0.57
 
 Claude Code 是 Anthropic 官方的命令列介面工具，可直接呼叫 AI agent 協助完成各種軟體工程任務。
 
@@ -34,6 +34,7 @@ claude [options] [command] [prompt]
 | `--input-format <format>` | 輸入格式：`text`（預設）、`stream-json` |
 | `--json-schema <schema>` | 結構化輸出的 JSON Schema 驗證 |
 | `--include-partial-messages` | 即時串流包含部分訊息 |
+| `--replay-user-messages` | 從 stdin 讀取的使用者訊息回傳到 stdout（僅串流模式） |
 
 ### 模型設定
 
@@ -62,8 +63,8 @@ claude [options] [command] [prompt]
 
 | 選項 | 說明 |
 |------|------|
-| `--system-prompt <prompt>` | 自訂系統提示 |
-| `--append-system-prompt <prompt>` | 附加系統提示到預設提示後 |
+| `--system-prompt <prompt>` | **取代**預設系統提示，使用自訂的提示 |
+| `--append-system-prompt <prompt>` | **附加**到預設系統提示後面（保留內建提示） |
 
 ### 工具與權限
 
@@ -74,6 +75,7 @@ claude [options] [command] [prompt]
 | `--tools <tools...>` | 指定可用工具（`""`=全部禁用, `default`=全部啟用） |
 | `--permission-mode <mode>` | 權限模式：`acceptEdits`, `bypassPermissions`, `default`, `dontAsk`, `plan` |
 | `--dangerously-skip-permissions` | 跳過所有權限檢查（僅建議用於沙盒環境） |
+| `--allow-dangerously-skip-permissions` | 允許跳過權限檢查作為選項，但預設不啟用 |
 
 ### 其他設定
 
@@ -83,8 +85,12 @@ claude [options] [command] [prompt]
 | `--verbose` | 詳細模式 |
 | `--add-dir <directories...>` | 增加允許工具存取的目錄 |
 | `--settings <file-or-json>` | 載入設定檔或 JSON 字串 |
+| `--setting-sources <sources>` | 設定來源：`user`, `project`, `local`（逗號分隔） |
 | `--agents <json>` | 定義自訂 agents |
 | `--ide` | 自動連接 IDE |
+| `--mcp-config <configs...>` | 從 JSON 檔案或字串載入 MCP 伺服器 |
+| `--strict-mcp-config` | 僅使用 --mcp-config 指定的 MCP 伺服器，忽略其他設定 |
+| `--plugin-dir <paths...>` | 僅本次會話載入指定目錄的插件 |
 
 ---
 

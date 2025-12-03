@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from pathlib import Path
+from datetime import datetime
 
 from app import data
 from app import claude
@@ -153,7 +154,7 @@ async def chat(request: Request):
 
     # 優先處理 actions 陣列
     if actions and isinstance(actions, list):
-        action_results = claude.execute_actions(username, actions)
+        action_results = claude.execute_actions(username, actions, is_manager)
 
         # 廣播每個動作的事件
         for result in action_results:
@@ -168,7 +169,7 @@ async def chat(request: Request):
                 await broadcast_event(event_type, event_data)
     elif action:
         # 向後相容：單一 action
-        action_result = claude.execute_action(username, action)
+        action_result = claude.execute_action(username, action, is_manager)
 
         # 廣播事件
         if action_result.get("success") and action_result.get("event"):
@@ -233,6 +234,9 @@ async def verify_admin(request: Request):
 @app.post("/api/recognize-menu")
 async def recognize_menu(request: Request):
     """辨識菜單圖片"""
+    import re
+    import hashlib
+
     body = await request.json()
     store_id = body.get("store_id")
     store_name = body.get("store_name")
@@ -243,15 +247,17 @@ async def recognize_menu(request: Request):
 
     # 如果是新店家，先建立
     if not store_id and store_name:
-        # 產生 store_id
-        import re
-        store_id = re.sub(r'[^a-z0-9-]', '-', store_name.lower())
-        store_id = re.sub(r'-+', '-', store_id).strip('-')
-        if not store_id:
-            store_id = f"store-{int(datetime.now().timestamp())}"
+        # 產生 store_id：先嘗試從英數字產生，若為空則用 hash
+        ascii_id = re.sub(r'[^a-z0-9-]', '-', store_name.lower())
+        ascii_id = re.sub(r'-+', '-', ascii_id).strip('-')
+        if ascii_id:
+            store_id = ascii_id
+        else:
+            # 中文店名：用名稱的 hash 前 8 碼
+            name_hash = hashlib.md5(store_name.encode('utf-8')).hexdigest()[:8]
+            store_id = f"store-{name_hash}"
 
         # 建立店家
-        from datetime import datetime
         info = {
             "id": store_id,
             "name": store_name,

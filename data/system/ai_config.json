@@ -1,0 +1,8 @@
+{
+  "chat": {
+    "model": "haiku"
+  },
+  "menu_recognition": {
+    "model": "sonnet"
+  }
+}

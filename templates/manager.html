@@ -23,9 +23,25 @@
   </div>
 
   <!-- 管理介面 -->
-  <div class="container" id="manager-section" style="display: none;">
-    <div class="order-page-layout">
-      <!-- 左側：對話區 -->
+  <div class="container admin-container" id="manager-section" style="display: none;">
+    <div class="admin-three-columns">
+      <!-- 左側：店家管理 -->
+      <div class="admin-left-panel">
+        <div class="panel-card stores-panel">
+          <div class="panel-header">
+            <span>🏬</span>
+            <span>店家管理</span>
+          </div>
+          <button class="menu-upload-btn" onclick="openMenuUpload()">
+            📷 上傳菜單
+          </button>
+          <div class="panel-content stores-panel-content" id="stores-content">
+            <div class="orders-empty">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中間：對話區 -->
       <div class="chat-container">
         <div class="chat-header">
           <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸管理模式</h1>
@@ -41,8 +57,8 @@
         </div>
       </div>
 
-      <!-- 右側：管理面板 -->
-      <div class="side-panel" id="admin-panel">
+      <!-- 右側：資訊面板 -->
+      <div class="admin-right-panel">
         <!-- 今日店家資訊 -->
         <div class="panel-card store-info-panel">
           <div class="panel-header">
@@ -73,18 +89,6 @@
           </div>
           <div class="panel-content" id="payments-content">
             <div class="orders-empty">無付款資料</div>
-          </div>
-        </div>
-
-        <!-- 店家管理面板 -->
-        <div class="panel-card stores-panel">
-          <div class="panel-header">
-            <span>🏬</span>
-            <span>店家管理</span>
-            <button class="panel-header-btn" onclick="openMenuUpload()" title="上傳菜單圖片">📷</button>
-          </div>
-          <div class="panel-content stores-panel-content" id="stores-content">
-            <div class="orders-empty">載入中...</div>
           </div>
         </div>
       </div>
@@ -151,13 +155,13 @@
   </div>
 
   <!-- 團隊聊天室 -->
-  <div class="team-chat minimized" id="team-chat" style="display: none;">
+  <div class="team-chat" id="team-chat" style="display: none;">
     <div class="team-chat-header" onclick="toggleTeamChat()">
       <span class="team-chat-title">
         <span>💬 團隊聊天室</span>
         <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
       </span>
-      <button class="team-chat-toggle" id="chat-toggle-btn">▲</button>
+      <button class="team-chat-toggle" id="chat-toggle-btn">▼</button>
     </div>
     <div class="team-chat-messages" id="team-chat-messages">
       <!-- 訊息會動態加入這裡 -->
@@ -486,8 +490,16 @@
           loadAdminData();
           loadAllStores();
 
-          // 顯示歡迎訊息
-          addMessage('assistant', `歡迎，管理員！\n\n你可以：\n• 設定今日店家（例：今天吃 sample-store）\n• 新增今日店家（例：今天再加一家 another-store）\n• 移除今日店家（例：把 sample-store 從今天移除）\n• 新增店家（例：新增一家店叫「美味便當」）\n• 編輯菜單（例：幫 sample-store 新增一道菜）\n• 查看今日訂單\n• 查看付款狀態\n• 標記已付款（例：小明已付款）\n• 清除所有訂單（例：清除今日所有訂單）`);
+          // 顯示靜態歡迎訊息
+          addMessage('assistant', `嗨，管理員！我是呷爸，有什麼需要幫忙的嗎？
+
+你可以：
+• 設定今日店家（例：今天吃佳香味便當）
+• 查看今日訂單
+• 查看付款狀態
+• 標記已付款（例：小明已付款）
+
+需要店家建議的話，可以問我「今天訂哪家好？」`);
 
           document.getElementById('message-input').focus();
           loadChatHistory();
@@ -647,7 +659,7 @@
     }
 
     // === 團隊聊天室 ===
-    let teamChatOpen = false;
+    let teamChatOpen = true;  // 預設展開
     let unreadCount = 0;
 
     function toggleTeamChat() {
@@ -890,6 +902,21 @@
           })
         });
 
+        // 檢查回應狀態
+        if (!res.ok) {
+          let errorMsg = `伺服器錯誤 (${res.status})`;
+          try {
+            const errData = await res.json();
+            errorMsg = errData.error || errorMsg;
+          } catch (e) {
+            // 無法解析 JSON，可能是 HTML 錯誤頁面
+          }
+          showUploadError(errorMsg);
+          document.getElementById('recognizing-step').style.display = 'none';
+          document.getElementById('upload-step').style.display = 'block';
+          return;
+        }
+
         const data = await res.json();
 
         if (data.error) {
@@ -908,7 +935,7 @@
 
       } catch (err) {
         console.error('辨識失敗:', err);
-        showUploadError('連線失敗，請稍後再試。錯誤：' + err.message);
+        showUploadError('連線失敗，請稍後再試');
         document.getElementById('recognizing-step').style.display = 'none';
         document.getElementById('upload-step').style.display = 'block';
       }

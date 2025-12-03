@@ -1,0 +1,15 @@
+[Unit]
+Description=jaba (呷爸) AI 午餐訂便當系統
+After=network.target
+
+[Service]
+Type=simple
+User=ct
+WorkingDirectory=/home/ct/SDD/jaba
+Environment="PATH=/home/ct/.nvm/versions/node/v24.11.1/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/ct/SDD/jaba/.venv/bin/uvicorn main:socket_app --host 0.0.0.0 --port 8098 --limit-max-request-size 20971520
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

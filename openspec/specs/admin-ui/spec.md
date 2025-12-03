@@ -1,0 +1,41 @@
+# admin-ui Specification
+
+## Purpose
+TBD - created by archiving change fix-admin-panel-layout. Update Purpose after archive.
+## Requirements
+### Requirement: 管理員面板三欄佈局
+管理員頁面 SHALL 採用三欄佈局：左側為店家管理、中間為對話框、右側為資訊面板（今日店家、今日訂單、付款狀態）。
+
+#### Scenario: 桌面版顯示
+- **WHEN** 在寬度足夠的螢幕檢視管理員頁面
+- **THEN** 顯示三欄佈局：左側店家管理、中間對話、右側資訊面板
+
+#### Scenario: 行動版顯示
+- **WHEN** 在小螢幕檢視管理員頁面
+- **THEN** 改為單欄垂直排列
+
+### Requirement: 店家管理面板完整滾動
+店家管理面板 SHALL 確保所有店家都能透過滾動查看，包含最後一個店家。
+
+#### Scenario: 多店家滾動
+- **WHEN** 店家數量超過面板可視高度
+- **THEN** 可滾動查看所有店家，最後一個店家能完整顯示
+
+### Requirement: 菜單上傳入口明顯化
+菜單上傳功能 SHALL 提供明顯的入口，讓管理員容易發現並使用。
+
+#### Scenario: 顯示上傳按鈕
+- **WHEN** 管理員檢視店家管理面板
+- **THEN** 顯示明顯的「上傳菜單」按鈕（含文字提示）
+
+### Requirement: 新增店家菜單上傳
+系統 SHALL 支援在上傳菜單時同時新增店家，正確處理中文店名。
+
+#### Scenario: 中文店名新增店家
+- **WHEN** 選擇「新增店家」並輸入中文店名後上傳菜單
+- **THEN** 成功建立店家並儲存菜單
+
+#### Scenario: 上傳錯誤處理
+- **WHEN** 菜單上傳發生錯誤
+- **THEN** 顯示具體錯誤訊息而非 HTML 解析錯誤
+

@@ -2,6 +2,7 @@
 import subprocess
 import json
 import re
+import uuid
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -12,28 +13,25 @@ from . import data
 def get_system_prompt(is_manager: bool = False) -> str:
     """取得系統提示詞"""
     prompt_data = data.get_jaba_prompt()
-    base_prompt = prompt_data.get("system_prompt", "")
 
     if is_manager:
+        # 管理員模式：載入 manager_prompt
+        base_prompt = prompt_data.get("manager_prompt", "")
         return f"""{base_prompt}
-
-你現在是管理員模式，可以執行以下額外動作：
-- set_today_store: 設定今日唯一店家，會清除其他店家 (data: {{"store_id": "...", "store_name": "..."}})
-- add_today_store: 新增今日店家（支援多店家）(data: {{"store_id": "...", "store_name": "..."}})
-- remove_today_store: 移除今日某店家 (data: {{"store_id": "..."}})
-- create_store: 新增店家 (data: {{"id": "...", "name": "...", "phone": "...", "address": "...", "description": "..."}})
-- update_store: 更新店家資訊 (data: {{"store_id": "...", ...欄位}})
-- update_menu: 更新菜單 (data: {{"store_id": "...", "categories": [...]}})
-- mark_paid: 標記已付款 (data: {{"username": "...", "date": "..."}})
-- query_payments: 查詢付款狀態 (data: {{"date": "..."}})
-- query_all_orders: 查詢所有訂單 (data: {{"date": "..."}})
-- cancel_order: 取消指定使用者的訂單 (data: {{"username": "...", "date": "..."}})
-- clear_all_orders: 清除今日所有訂單 (data: {{}})
-- clean_history_orders: 清除歷史訂單 (data: {{"before_date": "..."}})
 
 請用繁體中文回應。"""
 
+    # 一般使用者模式：載入 user_prompt
+    base_prompt = prompt_data.get("user_prompt", "")
     return f"""{base_prompt}
+
+可以執行的動作：
+- create_order: 建立訂單
+- update_order: 更新訂單
+- cancel_order: 取消訂單
+- reset_session: 重置對話記錄，下次對話將重新開始 (data: {{}})
+
+如果使用者說「重新開始」、「忘記之前的對話」、「清除對話記錄」等類似的話，請執行 reset_session 動作。
 
 請用繁體中文回應。回應格式必須是 JSON：
 {{"message": "給使用者的訊息", "action": {{"type": "動作類型", "data": {{...}}}} 或 null}}
@@ -92,8 +90,32 @@ def build_context(username: str, is_manager: bool = False) -> dict:
         payments = data.get_payments()
         if payments:
             context["payments"] = payments
+        # 提供過去 7 天的店家歷史記錄，供 AI 建議今日店家
+        context["recent_store_history"] = _get_recent_store_history(7)
 
     return context
+
+
+def _get_recent_store_history(days: int = 7) -> list:
+    """取得過去 N 天的店家訂餐記錄"""
+    from datetime import timedelta
+    history = []
+    today = date.today()
+
+    for i in range(1, days + 1):
+        past_date = today - timedelta(days=i)
+        date_str = past_date.isoformat()
+        summary = data.get_daily_summary(date_str)
+        if summary and summary.get("store_name"):
+            history.append({
+                "date": date_str,
+                "store_id": summary.get("store_id"),
+                "store_name": summary.get("store_name"),
+                "order_count": len(summary.get("orders", [])),
+                "grand_total": summary.get("grand_total", 0)
+            })
+
+    return history
 
 
 def call_claude(
@@ -105,8 +127,8 @@ def call_claude(
     # 確保使用者存在
     data.ensure_user(username)
 
-    # 取得或建立 session
-    session_id = data.get_session_id(username)
+    # 取得或建立 session（管理員和一般模式分開）
+    session_id = data.get_session_id(username, is_manager)
     system_prompt = get_system_prompt(is_manager)
     context = build_context(username, is_manager)
 
@@ -125,13 +147,21 @@ def call_claude(
 
 如果使用者的請求需要執行多個步驟，請使用 actions 陣列一次回傳所有需要執行的動作。"""
 
-    # 建立命令
-    cmd = ["claude", "-p"]
+    # 取得模型設定
+    ai_config = data.get_ai_config()
+    model = ai_config.get("chat", {}).get("model", "haiku")
+
+    # 建立命令（Claude CLI 支援直接使用 sonnet/opus/haiku 等簡稱）
+    cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt]
 
     if session_id:
+        # 後續對話：恢復 session（會自動帶入之前的對話歷史）
         cmd.extend(["--resume", session_id])
     else:
-        cmd.extend(["--append-system-prompt", system_prompt])
+        # 首次對話：生成 UUID 並建立 session
+        new_session_id = str(uuid.uuid4())
+        data.save_session_id(username, new_session_id, is_manager)
+        cmd.extend(["--session-id", new_session_id])
 
     cmd.append(full_message)
 
@@ -145,15 +175,6 @@ def call_claude(
         )
 
         response_text = result.stdout.strip()
-
-        # 嘗試從輸出中提取 session ID
-        # Claude CLI 會在輸出中包含 session 資訊
-        if not session_id and result.stderr:
-            # 嘗試解析 session ID
-            session_match = re.search(r'session[:\s]+([a-f0-9-]+)', result.stderr, re.I)
-            if session_match:
-                new_session_id = session_match.group(1)
-                data.save_session_id(username, new_session_id)
 
         # 嘗試解析 JSON 回應
         try:
@@ -187,19 +208,19 @@ def call_claude(
         }
 
 
-def execute_actions(username: str, actions: list) -> list:
+def execute_actions(username: str, actions: list, is_manager: bool = False) -> list:
     """執行多個 AI 請求的動作，回傳結果陣列"""
     if not actions:
         return []
 
     results = []
     for action in actions:
-        result = execute_action(username, action)
+        result = execute_action(username, action, is_manager)
         results.append(result)
     return results
 
 
-def execute_action(username: str, action: dict) -> dict:
+def execute_action(username: str, action: dict, is_manager: bool = False) -> dict:
     """執行單一 AI 請求的動作"""
     if not action:
         return {"success": True}
@@ -213,7 +234,7 @@ def execute_action(username: str, action: dict) -> dict:
         elif action_type == "update_order":
             return _update_order(username, action_data)
         elif action_type == "cancel_order":
-            return _cancel_order(username, action_data)
+            return _cancel_order(username, action_data, is_manager)
         elif action_type == "set_today_store":
             return _set_today_store(action_data)
         elif action_type == "add_today_store":
@@ -232,6 +253,8 @@ def execute_action(username: str, action: dict) -> dict:
             return _clear_all_orders(action_data)
         elif action_type == "clean_history_orders":
             return _clean_history_orders(action_data)
+        elif action_type == "reset_session":
+            return _reset_session(username, is_manager)
         else:
             return {"success": True, "message": "No action needed"}
     except Exception as e:
@@ -307,11 +330,13 @@ def _create_order(username: str, action_data: dict) -> dict:
     total = 0
     not_found_items = []
 
+    total_calories = 0
     for item in items:
         item_id = item.get("id")
         item_name = item.get("name", "")
         quantity = item.get("quantity", 1)
         note = item.get("note", "")
+        calories = item.get("calories", 0)  # AI 估算的卡路里
 
         # 從菜單找價格和名稱
         menu_item = find_menu_item(menu, item_id, item_name)
@@ -322,9 +347,11 @@ def _create_order(username: str, action_data: dict) -> dict:
                 "name": menu_item["name"],
                 "price": menu_item["price"],
                 "quantity": quantity,
-                "note": note
+                "note": note,
+                "calories": calories
             })
             total += menu_item["price"] * quantity
+            total_calories += calories * quantity
         else:
             not_found_items.append(item_name or item_id)
 
@@ -340,6 +367,7 @@ def _create_order(username: str, action_data: dict) -> dict:
         "store_name": store_name,
         "items": enriched_items,
         "total": total,
+        "total_calories": total_calories,
         "status": "confirmed",
         "created_at": datetime.now().isoformat()
     }
@@ -376,11 +404,42 @@ def _update_order(username: str, action_data: dict) -> dict:
     return _create_order(username, action_data)
 
 
-def _cancel_order(username: str, action_data: dict) -> dict:
+def _update_payments_after_cancel(username: str, order_date: str) -> None:
+    """取消訂單後更新付款記錄"""
+    payments = data.get_payments(order_date)
+    if not payments:
+        return
+
+    # 取得使用者剩餘的訂單總額
+    remaining_orders = data.get_user_orders(username, order_date)
+    new_total = sum(o.get("total", 0) for o in remaining_orders) if remaining_orders else 0
+
+    # 更新或移除付款記錄
+    if new_total == 0:
+        # 沒有訂單了，移除付款記錄
+        payments["records"] = [r for r in payments["records"] if r["username"] != username]
+    else:
+        # 更新金額
+        record = next((r for r in payments["records"] if r["username"] == username), None)
+        if record:
+            record["amount"] = new_total
+
+    # 重新計算總額
+    payments["total_collected"] = sum(r["amount"] for r in payments["records"] if r["paid"])
+    payments["total_pending"] = sum(r["amount"] for r in payments["records"] if not r["paid"])
+
+    data.save_payments(payments)
+
+
+def _cancel_order(username: str, action_data: dict, is_manager: bool = False) -> dict:
     """取消訂單（支援指定 order_id 或使用者）"""
     target_username = action_data.get("username", username)
     order_date = action_data.get("date", date.today().isoformat())
     order_id = action_data.get("order_id")
+
+    # 權限檢查：非管理員只能取消自己的訂單
+    if not is_manager and target_username != username:
+        return {"success": False, "error": "只能取消自己的訂單"}
 
     # 如果有指定 order_id，取消特定訂單
     if order_id:
@@ -402,6 +461,9 @@ def _cancel_order(username: str, action_data: dict) -> dict:
             summary["item_summary"] = [{"name": k, "quantity": v} for k, v in item_counts.items()]
             summary["grand_total"] = sum(o["total"] for o in summary["orders"])
             data.save_daily_summary(summary)
+
+        # 更新付款記錄
+        _update_payments_after_cancel(target_username, order_date)
 
         return {
             "success": True,
@@ -441,6 +503,9 @@ def _cancel_order(username: str, action_data: dict) -> dict:
         summary["item_summary"] = [{"name": k, "quantity": v} for k, v in item_counts.items()]
         summary["grand_total"] = sum(o["total"] for o in summary["orders"])
         data.save_daily_summary(summary)
+
+    # 更新付款記錄
+    _update_payments_after_cancel(target_username, order_date)
 
     return {
         "success": True,
@@ -693,6 +758,23 @@ def _clean_history_orders(action_data: dict) -> dict:
     }
 
 
+def _reset_session(username: str, is_manager: bool) -> dict:
+    """重置對話 session，讓下次對話重新開始"""
+    cleared = data.clear_session_id(username, is_manager)
+    mode = "管理員" if is_manager else "一般"
+    if cleared:
+        return {
+            "success": True,
+            "message": f"已重置{mode}模式的對話記錄，下次對話將重新開始",
+            "event": "session_reset"
+        }
+    else:
+        return {
+            "success": True,
+            "message": f"目前沒有進行中的{mode}模式對話記錄"
+        }
+
+
 def recognize_menu_image(image_base64: str) -> dict:
     """使用 Claude Vision 辨識菜單圖片"""
     import base64
@@ -748,11 +830,16 @@ def recognize_menu_image(image_base64: str) -> dict:
 - 如果沒有明確分類，請使用「一般」作為分類名稱
 - available 預設為 true"""
 
+        # 取得模型設定
+        ai_config = data.get_ai_config()
+        model = ai_config.get("menu_recognition", {}).get("model", "sonnet")
+
         # 使用 Claude CLI 分析圖片
-        # 使用 --tools 啟用 Read 工具來讀取圖片
+        # Claude CLI 支援直接使用 sonnet/opus/haiku 等簡稱
         full_prompt = f"請先使用 Read 工具讀取圖片 {temp_path}，然後{prompt}"
         cmd = [
             "claude", "-p", full_prompt,
+            "--model", model,
             "--tools", "Read",
             "--allowedTools", "Read",
             "--dangerously-skip-permissions"

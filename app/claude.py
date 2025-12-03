@@ -21,22 +21,11 @@ def get_system_prompt(is_manager: bool = False) -> str:
 
 請用繁體中文回應。"""
 
-    # 一般使用者模式：載入 user_prompt
+    # 一般使用者模式：載入 user_prompt（已包含完整的動作說明和格式）
     base_prompt = prompt_data.get("user_prompt", "")
     return f"""{base_prompt}
 
-可以執行的動作：
-- create_order: 建立訂單
-- update_order: 更新訂單
-- cancel_order: 取消訂單
-- reset_session: 重置對話記錄，下次對話將重新開始 (data: {{}})
-
-如果使用者說「重新開始」、「忘記之前的對話」、「清除對話記錄」等類似的話，請執行 reset_session 動作。
-
-請用繁體中文回應。回應格式必須是 JSON：
-{{"message": "給使用者的訊息", "action": {{"type": "動作類型", "data": {{...}}}} 或 null}}
-
-如果不需要執行動作，action 可以是 null。"""
+請用繁體中文回應。"""
 
 
 def build_context(username: str, is_manager: bool = False) -> dict:
@@ -65,23 +54,16 @@ def build_context(username: str, is_manager: bool = False) -> dict:
                     "menu": menu
                 }
 
-    # 向後相容：單店家時也提供 menu 欄位
-    if today_info.get("store_id"):
-        store = data.get_store(today_info["store_id"])
-        if store:
-            context["today_store_note"] = store.get("note", "")
-        menu = data.get_menu(today_info["store_id"])
-        if menu:
-            context["menu"] = menu
-
     if not is_manager:
         context["username"] = username
+        # 取得使用者 profile（包含偏好設定）
+        profile = data.get_user_profile(username)
+        if profile:
+            context["user_profile"] = profile.get("preferences", {})
         # 取得使用者所有訂單
         user_orders = data.get_user_orders(username)
         if user_orders:
             context["current_orders"] = user_orders
-            # 向後相容：也提供單一訂單
-            context["current_order"] = user_orders[-1]
 
     if is_manager:
         summary = data.get_daily_summary()
@@ -141,11 +123,10 @@ def call_claude(
 {message}
 
 請以 JSON 格式回應：
-- 單一動作：{{"message": "...", "action": {{"type": "...", "data": {{...}}}} }}
-- 多個動作：{{"message": "...", "actions": [{{"type": "...", "data": {{...}}}}, ...] }}
-- 無動作：{{"message": "...", "action": null}}
+{{"message": "你的回應訊息", "actions": [{{"type": "動作類型", "data": {{...}}}}, ...] }}
 
-如果使用者的請求需要執行多個步驟，請使用 actions 陣列一次回傳所有需要執行的動作。"""
+如果不需要執行動作，actions 可以是空陣列 []。
+如果需要執行多個步驟，在 actions 陣列中一次回傳所有動作。"""
 
     # 取得模型設定
     ai_config = data.get_ai_config()
@@ -186,24 +167,24 @@ def call_claude(
             else:
                 return {
                     "message": response_text,
-                    "action": None
+                    "actions": []
                 }
         except json.JSONDecodeError:
             return {
                 "message": response_text,
-                "action": None
+                "actions": []
             }
 
     except subprocess.TimeoutExpired:
         return {
             "message": "抱歉，回應超時了，請再試一次。",
-            "action": None,
+            "actions": [],
             "error": "timeout"
         }
     except Exception as e:
         return {
             "message": f"發生錯誤：{str(e)}",
-            "action": None,
+            "actions": [],
             "error": str(e)
         }
 
@@ -247,14 +228,22 @@ def execute_action(username: str, action: dict, is_manager: bool = False) -> dic
             return _update_store(action_data)
         elif action_type == "update_menu":
             return _update_menu(action_data)
+        elif action_type == "update_item_variants":
+            return _update_item_variants(action_data)
         elif action_type == "mark_paid":
             return _mark_paid(action_data)
+        elif action_type == "mark_refunded":
+            return _mark_refunded(action_data)
         elif action_type == "clear_all_orders":
             return _clear_all_orders(action_data)
         elif action_type == "clean_history_orders":
             return _clean_history_orders(action_data)
         elif action_type == "reset_session":
             return _reset_session(username, is_manager)
+        elif action_type == "update_user_profile":
+            return _update_user_profile(username, action_data)
+        elif action_type == "remove_item":
+            return _remove_item(username, action_data)
         else:
             return {"success": True, "message": "No action needed"}
     except Exception as e:
@@ -268,7 +257,7 @@ def _create_order(username: str, action_data: dict) -> dict:
     today_info = data.get_today_info()
     today_stores = today_info.get("stores", [])
 
-    if not today_stores and not today_info.get("store_id"):
+    if not today_stores:
         return {"success": False, "error": "今日尚未設定店家"}
 
     # 支援多店家：從 action_data 取得指定的 store_id
@@ -307,10 +296,10 @@ def _create_order(username: str, action_data: dict) -> dict:
             if store_id:
                 break
 
-    # 如果還是沒有店家，使用預設（第一個店家）
-    if not store_id:
-        store_id = today_info.get("store_id")
-        store_name = today_info.get("store_name")
+    # 如果還是沒有店家，使用第一個店家作為預設
+    if not store_id and today_stores:
+        store_id = today_stores[0]["store_id"]
+        store_name = today_stores[0].get("store_name", "")
 
     if not store_id:
         return {"success": False, "error": "找不到對應的店家"}
@@ -336,21 +325,30 @@ def _create_order(username: str, action_data: dict) -> dict:
         item_name = item.get("name", "")
         quantity = item.get("quantity", 1)
         note = item.get("note", "")
+        size = item.get("size", "")  # 尺寸（如 M, L）
         calories = item.get("calories", 0)  # AI 估算的卡路里
 
         # 從菜單找價格和名稱
         menu_item = find_menu_item(menu, item_id, item_name)
 
         if menu_item:
+            # 決定價格：如果有指定尺寸且菜單有 variants，查找對應價格
+            price = menu_item["price"]  # 預設價格
+            if size and menu_item.get("variants"):
+                variant = next((v for v in menu_item["variants"] if v["name"] == size), None)
+                if variant:
+                    price = variant["price"]
+
             enriched_items.append({
                 "id": menu_item.get("id", item_id or item_name),
                 "name": menu_item["name"],
-                "price": menu_item["price"],
+                "price": price,
                 "quantity": quantity,
+                "size": size if size else None,
                 "note": note,
                 "calories": calories
             })
-            total += menu_item["price"] * quantity
+            total += price * quantity
             total_calories += calories * quantity
         else:
             not_found_items.append(item_name or item_id)
@@ -414,19 +412,39 @@ def _update_payments_after_cancel(username: str, order_date: str) -> None:
     remaining_orders = data.get_user_orders(username, order_date)
     new_total = sum(o.get("total", 0) for o in remaining_orders) if remaining_orders else 0
 
+    record = next((r for r in payments["records"] if r["username"] == username), None)
+    if not record:
+        return
+
+    paid_amount = record.get("paid_amount", 0)
+
     # 更新或移除付款記錄
     if new_total == 0:
-        # 沒有訂單了，移除付款記錄
-        payments["records"] = [r for r in payments["records"] if r["username"] != username]
+        if paid_amount > 0:
+            # 有付過款，保留記錄並標記待退
+            record["amount"] = 0
+            record["note"] = f"待退 ${paid_amount}"
+        else:
+            # 沒付過款，直接移除
+            payments["records"] = [r for r in payments["records"] if r["username"] != username]
     else:
         # 更新金額
-        record = next((r for r in payments["records"] if r["username"] == username), None)
-        if record:
-            record["amount"] = new_total
+        record["amount"] = new_total
+        # 如果有付過款，智慧更新狀態
+        if paid_amount > 0:
+            if new_total > paid_amount:
+                record["paid"] = False
+                record["note"] = f"已付 ${paid_amount}，待補 ${new_total - paid_amount}"
+            elif new_total < paid_amount:
+                record["paid"] = True
+                record["note"] = f"待退 ${paid_amount - new_total}"
+            else:
+                record["paid"] = True
+                record["note"] = None
 
-    # 重新計算總額
-    payments["total_collected"] = sum(r["amount"] for r in payments["records"] if r["paid"])
-    payments["total_pending"] = sum(r["amount"] for r in payments["records"] if not r["paid"])
+    # 重新計算總額（基於 paid_amount）
+    payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+    payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
 
     data.save_payments(payments)
 
@@ -473,7 +491,7 @@ def _cancel_order(username: str, action_data: dict, is_manager: bool = False) ->
             "summary": summary
         }
 
-    # 沒有 order_id 時，取消該使用者所有訂單（向後相容）
+    # 沒有 order_id 時，取消該使用者所有訂單
     orders = data.get_user_orders(target_username, order_date)
     if not orders:
         return {"success": False, "error": "找不到訂單"}
@@ -483,11 +501,6 @@ def _cancel_order(username: str, action_data: dict, is_manager: bool = False) ->
         oid = order.get("order_id")
         if oid:
             data.delete_user_order(target_username, oid)
-        else:
-            # 舊格式
-            order_file = data.DATA_DIR / "users" / target_username / "orders" / f"{order_date}.json"
-            if order_file.exists():
-                order_file.unlink()
 
     # 從彙整中移除
     summary = data.get_daily_summary(order_date)
@@ -653,6 +666,91 @@ def _update_menu(action_data: dict) -> dict:
     return {"success": True, "menu": menu}
 
 
+def _update_item_variants(action_data: dict) -> dict:
+    """更新菜單品項的尺寸變體"""
+    from datetime import datetime
+
+    store_id = action_data.get("store_id")
+    item_id = action_data.get("item_id")
+    item_name = action_data.get("item_name")
+    variants = action_data.get("variants")  # 完整的 variants 陣列
+    add_variant = action_data.get("add_variant")  # 新增單一尺寸 {"name": "L", "price": 60}
+    remove_variant = action_data.get("remove_variant")  # 移除尺寸名稱 "L"
+    update_variant = action_data.get("update_variant")  # 更新單一尺寸 {"name": "L", "price": 65}
+
+    if not store_id:
+        return {"success": False, "error": "缺少 store_id"}
+
+    if not item_id and not item_name:
+        return {"success": False, "error": "缺少 item_id 或 item_name"}
+
+    menu = data.get_menu(store_id)
+    if not menu:
+        return {"success": False, "error": "找不到菜單"}
+
+    # 找到品項
+    target_item = None
+    for cat in menu.get("categories", []):
+        for item in cat.get("items", []):
+            if (item_id and item.get("id") == item_id) or \
+               (item_name and (item.get("name") == item_name or item_name in item.get("name", ""))):
+                target_item = item
+                break
+        if target_item:
+            break
+
+    if not target_item:
+        return {"success": False, "error": f"找不到品項：{item_id or item_name}"}
+
+    # 執行更新
+    if variants is not None:
+        # 完整覆蓋 variants
+        if variants:
+            target_item["variants"] = variants
+        else:
+            # 空陣列表示刪除所有 variants
+            target_item.pop("variants", None)
+
+    elif add_variant:
+        # 新增單一尺寸
+        if "variants" not in target_item:
+            target_item["variants"] = []
+        # 檢查是否已存在
+        existing = next((v for v in target_item["variants"] if v["name"] == add_variant["name"]), None)
+        if existing:
+            existing["price"] = add_variant["price"]
+        else:
+            target_item["variants"].append(add_variant)
+
+    elif remove_variant:
+        # 移除尺寸
+        if "variants" in target_item:
+            target_item["variants"] = [v for v in target_item["variants"] if v["name"] != remove_variant]
+            if not target_item["variants"]:
+                del target_item["variants"]
+
+    elif update_variant:
+        # 更新單一尺寸價格
+        if "variants" in target_item:
+            existing = next((v for v in target_item["variants"] if v["name"] == update_variant["name"]), None)
+            if existing:
+                existing["price"] = update_variant["price"]
+            else:
+                return {"success": False, "error": f"找不到尺寸：{update_variant['name']}"}
+        else:
+            return {"success": False, "error": "該品項沒有尺寸變體"}
+
+    # 儲存菜單
+    menu["updated_at"] = datetime.now().isoformat()
+    data.save_menu(store_id, menu)
+
+    return {
+        "success": True,
+        "item": target_item,
+        "message": f"已更新「{target_item['name']}」的尺寸價格"
+    }
+
+
 def _mark_paid(action_data: dict) -> dict:
     """標記已付款"""
     from datetime import datetime
@@ -673,13 +771,54 @@ def _mark_paid(action_data: dict) -> dict:
 
     record["paid"] = True
     record["paid_at"] = datetime.now().isoformat()
+    record["paid_amount"] = record["amount"]  # 設定已付金額
+    record["note"] = None  # 清除備註
 
-    # 重新計算總額
-    payments["total_collected"] = sum(r["amount"] for r in payments["records"] if r["paid"])
-    payments["total_pending"] = sum(r["amount"] for r in payments["records"] if not r["paid"])
+    # 重新計算總額（基於 paid_amount）
+    payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+    payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
 
     data.save_payments(payments)
-    return {"success": True, "payments": payments}
+    return {"success": True, "event": "payment_updated", "payments": payments}
+
+
+def _mark_refunded(action_data: dict) -> dict:
+    """標記已退款（確認已退還多付的金額）"""
+    username = action_data.get("username")
+    order_date = action_data.get("date", date.today().isoformat())
+
+    if not username:
+        return {"success": False, "error": "缺少 username"}
+
+    payments = data.get_payments(order_date)
+    if not payments:
+        return {"success": False, "error": "找不到付款記錄"}
+
+    record = next((r for r in payments["records"] if r["username"] == username), None)
+    if not record:
+        return {"success": False, "error": "找不到該使用者的付款記錄"}
+
+    paid_amount = record.get("paid_amount", 0)
+    if paid_amount == 0:
+        return {"success": False, "error": "該使用者沒有已付款項"}
+
+    amount = record.get("amount", 0)
+
+    if amount > 0:
+        # 還有訂單：確認退款後，paid_amount 調整為等於 amount（多付的已退）
+        record["paid"] = True
+        record["paid_amount"] = amount
+        record["note"] = None
+    else:
+        # 沒有訂單了：移除記錄
+        payments["records"] = [r for r in payments["records"] if r["username"] != username]
+
+    # 重新計算總額
+    payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+    payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
+
+    data.save_payments(payments)
+    return {"success": True, "event": "payment_updated", "payments": payments, "message": f"已確認退款給 {username}"}
 
 
 def _clear_all_orders(action_data: dict) -> dict:
@@ -704,12 +843,24 @@ def _clear_all_orders(action_data: dict) -> dict:
         summary["grand_total"] = 0
         data.save_daily_summary(summary)
 
-    # 清除付款記錄
+    # 處理付款記錄
     payments = data.get_payments(order_date)
     if payments:
-        payments["records"] = []
-        payments["total_collected"] = 0
-        payments["total_pending"] = 0
+        # 保留有 paid_amount > 0 的記錄（待退款）
+        new_records = []
+        for record in payments["records"]:
+            paid_amount = record.get("paid_amount", 0)
+            if paid_amount > 0:
+                # 有付過款，保留記錄並標記待退
+                record["amount"] = 0
+                record["note"] = f"待退 ${paid_amount}"
+                new_records.append(record)
+            # paid_amount = 0 的記錄直接移除
+
+        payments["records"] = new_records
+        # 重新計算總額
+        payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+        payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
         data.save_payments(payments)
 
     return {
@@ -775,6 +926,150 @@ def _reset_session(username: str, is_manager: bool) -> dict:
         }
 
 
+def _update_user_profile(username: str, action_data: dict) -> dict:
+    """更新使用者偏好設定"""
+    profile = data.update_user_profile(username, action_data)
+    return {
+        "success": True,
+        "profile": profile,
+        "message": "已更新你的偏好設定",
+        "event": "profile_updated"
+    }
+
+
+def _remove_item(username: str, action_data: dict) -> dict:
+    """從現有訂單中移除品項"""
+    from datetime import datetime
+
+    item_name = action_data.get("item_name", "")
+    item_id = action_data.get("item_id")
+    quantity_to_remove = action_data.get("quantity", 1)
+    order_date = action_data.get("date", date.today().isoformat())
+
+    if not item_name and not item_id:
+        return {"success": False, "error": "請指定要移除的品項名稱或 ID"}
+
+    # 取得使用者所有訂單
+    user_orders = data.get_user_orders(username, order_date)
+    if not user_orders:
+        return {"success": False, "error": "目前沒有訂單"}
+
+    # 尋找包含該品項的訂單
+    target_order = None
+    target_item_idx = None
+
+    for order in user_orders:
+        for idx, item in enumerate(order.get("items", [])):
+            # 用 id 或 name 匹配
+            if (item_id and item.get("id") == item_id) or \
+               (item_name and (item.get("name") == item_name or item_name in item.get("name", ""))):
+                target_order = order
+                target_item_idx = idx
+                break
+        if target_order:
+            break
+
+    if not target_order:
+        return {"success": False, "error": f"找不到品項：{item_name or item_id}"}
+
+    order_id = target_order.get("order_id")
+    items = target_order.get("items", [])
+    target_item = items[target_item_idx]
+    current_qty = target_item.get("quantity", 1)
+
+    if quantity_to_remove >= current_qty:
+        # 移除整個品項
+        items.pop(target_item_idx)
+    else:
+        # 減少數量
+        target_item["quantity"] = current_qty - quantity_to_remove
+
+    # 如果訂單沒有品項了，刪除整筆訂單
+    if len(items) == 0:
+        data.delete_user_order(username, order_id)
+
+        # 從 daily summary 移除
+        summary = data.get_daily_summary(order_date)
+        if summary:
+            summary["orders"] = [o for o in summary["orders"] if o.get("order_id") != order_id]
+            # 重新計算
+            item_counts = {}
+            for o in summary["orders"]:
+                for item in o["items"]:
+                    name = item["name"]
+                    qty = item.get("quantity", 1)
+                    item_counts[name] = item_counts.get(name, 0) + qty
+            summary["item_summary"] = [{"name": k, "quantity": v} for k, v in item_counts.items()]
+            summary["grand_total"] = sum(o["total"] for o in summary["orders"])
+            data.save_daily_summary(summary)
+
+        # 更新付款記錄
+        _update_payments_after_cancel(username, order_date)
+
+        return {
+            "success": True,
+            "message": f"已移除「{target_item.get('name')}」，訂單已刪除",
+            "event": "order_cancelled",
+            "username": username,
+            "summary": summary
+        }
+
+    # 更新訂單
+    target_order["items"] = items
+    target_order["total"] = sum(item.get("price", 0) * item.get("quantity", 1) for item in items)
+    target_order["total_calories"] = sum(item.get("calories", 0) * item.get("quantity", 1) for item in items)
+
+    # 儲存更新的訂單
+    data.write_json(data.DATA_DIR / "users" / username / "orders" / f"{order_id}.json", target_order)
+
+    # 更新 daily summary
+    summary = data.get_daily_summary(order_date)
+    if summary:
+        # 更新對應訂單
+        for idx, o in enumerate(summary["orders"]):
+            if o.get("order_id") == order_id:
+                summary["orders"][idx] = {
+                    "order_id": order_id,
+                    "username": username,
+                    "store_id": target_order.get("store_id"),
+                    "store_name": target_order.get("store_name"),
+                    "items": items,
+                    "total": target_order["total"]
+                }
+                break
+
+        # 重新計算品項統計
+        item_counts = {}
+        for o in summary["orders"]:
+            for item in o["items"]:
+                name = item["name"]
+                qty = item.get("quantity", 1)
+                item_counts[name] = item_counts.get(name, 0) + qty
+        summary["item_summary"] = [{"name": k, "quantity": v} for k, v in item_counts.items()]
+        summary["grand_total"] = sum(o["total"] for o in summary["orders"])
+        data.save_daily_summary(summary)
+
+    # 更新付款記錄
+    payments = data.get_payments(order_date)
+    if payments:
+        user_total = sum(o["total"] for o in data.get_user_orders(username, order_date) or [])
+        record = next((r for r in payments["records"] if r["username"] == username), None)
+        if record:
+            record["amount"] = user_total
+            # 重新計算總額
+            payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+            payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
+            data.save_payments(payments)
+
+    return {
+        "success": True,
+        "message": f"已從訂單移除「{target_item.get('name')}」",
+        "event": "order_updated",
+        "order": target_order,
+        "summary": summary
+    }
+
+
 def recognize_menu_image(image_base64: str) -> dict:
     """使用 Claude Vision 辨識菜單圖片"""
     import base64
@@ -800,35 +1095,9 @@ def recognize_menu_image(image_base64: str) -> dict:
         f.write(image_data)
 
     try:
-        # 使用 Claude CLI 分析圖片
-        prompt = """請分析這張菜單圖片，提取所有菜單項目。
-
-回傳 JSON 格式：
-{
-  "categories": [
-    {
-      "name": "分類名稱",
-      "items": [
-        {
-          "id": "item-1",
-          "name": "品項名稱",
-          "price": 數字價格,
-          "description": "描述（如有）",
-          "available": true
-        }
-      ]
-    }
-  ],
-  "warnings": ["無法辨識的項目或需要確認的事項"]
-}
-
-注意事項：
-- id 請用 item-1, item-2... 格式
-- 價格請只填數字，不含貨幣符號
-- 如果無法辨識價格，請填 0 並在 warnings 中說明
-- 盡可能保留原始分類結構
-- 如果沒有明確分類，請使用「一般」作為分類名稱
-- available 預設為 true"""
+        # 從檔案讀取 prompt
+        prompt_data = data.get_jaba_prompt()
+        prompt = prompt_data.get("menu_recognition_prompt", "請分析這張菜單圖片，提取所有菜單項目並回傳 JSON 格式。")
 
         # 取得模型設定
         ai_config = data.get_ai_config()

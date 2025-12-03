@@ -1,6 +1,15 @@
 {
   "date": "2025-12-03",
-  "records": [],
-  "total_collected": 0,
-  "total_pending": 0
+  "records": [
+    {
+      "username": "亞澤",
+      "amount": 130,
+      "paid": false,
+      "paid_amount": 20,
+      "paid_at": "2025-12-03T21:13:04.735196",
+      "note": "已付 $20，待補 $110"
+    }
+  ],
+  "total_collected": 20,
+  "total_pending": 110
 }

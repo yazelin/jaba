@@ -61,30 +61,12 @@ def get_config() -> dict:
 
 
 def get_today_info() -> dict:
-    """取得今日訂餐資訊（支援多店家）"""
-    data = read_json(DATA_DIR / "system" / "today.json") or {}
-
-    # 如果是舊格式（單店家），轉換為新格式
-    if data and "stores" not in data and data.get("store_id"):
-        data = {
-            "date": data.get("date", date.today().isoformat()),
-            "stores": [{
-                "store_id": data["store_id"],
-                "store_name": data.get("store_name", ""),
-                "status": data.get("status", "open"),
-                "set_by": data.get("set_by", "管理員"),
-                "set_at": data.get("set_at", "")
-            }],
-            # 向後相容：保留單店家欄位
-            "store_id": data["store_id"],
-            "store_name": data.get("store_name", "")
-        }
-
-    return data
+    """取得今日訂餐資訊"""
+    return read_json(DATA_DIR / "system" / "today.json") or {}
 
 
 def set_today_store(store_id: str, store_name: str, set_by: str = "管理員") -> dict:
-    """設定今日店家（向後相容，設定單一店家會清除其他店家）"""
+    """設定今日店家（清除其他店家並設定單一店家）"""
     return add_today_store(store_id, store_name, set_by, clear_others=True)
 
 
@@ -118,11 +100,6 @@ def add_today_store(store_id: str, store_name: str, set_by: str = "管理員", c
             "set_at": datetime.now().isoformat()
         })
 
-    # 向後相容：設定第一個店家為預設
-    if data["stores"]:
-        data["store_id"] = data["stores"][0]["store_id"]
-        data["store_name"] = data["stores"][0]["store_name"]
-
     write_json(DATA_DIR / "system" / "today.json", data)
     return data
 
@@ -134,21 +111,28 @@ def remove_today_store(store_id: str) -> dict:
     if "stores" in data:
         data["stores"] = [s for s in data["stores"] if s["store_id"] != store_id]
 
-        # 更新向後相容欄位
-        if data["stores"]:
-            data["store_id"] = data["stores"][0]["store_id"]
-            data["store_name"] = data["stores"][0]["store_name"]
-        else:
-            data["store_id"] = None
-            data["store_name"] = None
-
     write_json(DATA_DIR / "system" / "today.json", data)
     return data
 
 
 def get_jaba_prompt() -> dict:
-    """取得 AI 系統提示詞"""
-    return read_json(DATA_DIR / "system" / "prompts" / "jaba.json") or {}
+    """取得 AI 系統提示詞（從 .md 檔案讀取）"""
+    prompts_dir = DATA_DIR / "system" / "prompts"
+    result = {}
+
+    user_prompt_file = prompts_dir / "user_prompt.md"
+    if user_prompt_file.exists():
+        result["user_prompt"] = user_prompt_file.read_text(encoding="utf-8")
+
+    manager_prompt_file = prompts_dir / "manager_prompt.md"
+    if manager_prompt_file.exists():
+        result["manager_prompt"] = manager_prompt_file.read_text(encoding="utf-8")
+
+    menu_recognition_file = prompts_dir / "menu_recognition_prompt.md"
+    if menu_recognition_file.exists():
+        result["menu_recognition_prompt"] = menu_recognition_file.read_text(encoding="utf-8")
+
+    return result
 
 
 def get_ai_config() -> dict:
@@ -244,6 +228,32 @@ def get_users() -> list[dict]:
     return users
 
 
+def get_user_profile(username: str) -> dict | None:
+    """取得使用者 profile（包含偏好設定）"""
+    return read_json(DATA_DIR / "users" / username / "profile.json")
+
+
+def update_user_profile(username: str, updates: dict) -> dict:
+    """更新使用者 profile 的偏好設定"""
+    profile = get_user_profile(username)
+    if not profile:
+        # 使用者不存在，先建立
+        profile = ensure_user(username)
+
+    # 確保 preferences 欄位存在
+    if "preferences" not in profile:
+        profile["preferences"] = {}
+
+    # 更新 preferences 中的欄位
+    for key, value in updates.items():
+        if key in ["preferred_name", "dietary_restrictions", "allergies", "notes"]:
+            profile["preferences"][key] = value
+
+    # 儲存更新後的 profile
+    write_json(DATA_DIR / "users" / username / "profile.json", profile)
+    return profile
+
+
 def get_session_id(username: str, is_manager: bool = False) -> str | None:
     """取得使用者今日的 session ID（管理員和一般模式分開）"""
     today = date.today().isoformat()
@@ -277,14 +287,7 @@ def clear_session_id(username: str, is_manager: bool = False) -> bool:
 # === 訂單管理 ===
 
 def get_user_order(username: str, order_date: str = None) -> dict | None:
-    """取得使用者某日的單一訂單（向後相容，取得最新一筆）"""
-    if order_date is None:
-        order_date = date.today().isoformat()
-    # 先嘗試舊格式
-    old_format = read_json(DATA_DIR / "users" / username / "orders" / f"{order_date}.json")
-    if old_format:
-        return old_format
-    # 嘗試新格式（多訂單）
+    """取得使用者某日的最新訂單"""
     orders = get_user_orders(username, order_date)
     return orders[-1] if orders else None
 
@@ -298,14 +301,7 @@ def get_user_orders(username: str, order_date: str = None) -> list[dict]:
         return []
 
     orders = []
-    # 舊格式：{date}.json
-    old_file = orders_dir / f"{order_date}.json"
-    if old_file.exists():
-        order = read_json(old_file)
-        if order:
-            orders.append(order)
-
-    # 新格式：{date}-{timestamp}.json
+    # 訂單格式：{date}-{timestamp}.json
     for f in orders_dir.glob(f"{order_date}-*.json"):
         order = read_json(f)
         if order:
@@ -380,12 +376,8 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
         "updated_at": datetime.now().isoformat()
     }
 
-    # 如果有 order_id，用它來識別；否則用 username（向後相容）
-    if order_id:
-        summary["orders"] = [o for o in summary["orders"] if o.get("order_id") != order_id]
-    else:
-        # 舊邏輯：移除該使用者的訂單（只保留最新一筆）
-        summary["orders"] = [o for o in summary["orders"] if o["username"] != username]
+    # 用 order_id 識別訂單
+    summary["orders"] = [o for o in summary["orders"] if o.get("order_id") != order_id]
 
     # 加入新訂單
     summary["orders"].append({
@@ -425,19 +417,37 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
     # 更新或新增付款記錄
     existing = next((r for r in payments["records"] if r["username"] == username), None)
     if existing:
+        old_amount = existing["amount"]
+        paid_amount = existing.get("paid_amount", 0)
         existing["amount"] = user_total
+
+        # 如果有付過款且金額有變動，智慧更新付款狀態
+        if paid_amount > 0 and old_amount != user_total:
+            if user_total > paid_amount:
+                # 金額增加：變成部分已付
+                existing["paid"] = False
+                existing["note"] = f"已付 ${paid_amount}，待補 ${user_total - paid_amount}"
+            elif user_total < paid_amount:
+                # 金額減少：維持已付，標記待退
+                existing["paid"] = True
+                existing["note"] = f"待退 ${paid_amount - user_total}"
+            else:
+                # 金額等於已付金額：清除備註
+                existing["paid"] = True
+                existing["note"] = None
     else:
         payments["records"].append({
             "username": username,
             "amount": user_total,
             "paid": False,
+            "paid_amount": 0,
             "paid_at": None,
             "note": None
         })
 
-    # 重新計算總額
-    payments["total_collected"] = sum(r["amount"] for r in payments["records"] if r["paid"])
-    payments["total_pending"] = sum(r["amount"] for r in payments["records"] if not r["paid"])
+    # 重新計算總額（基於 paid_amount）
+    payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
+    payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
 
     save_payments(payments)
 
@@ -478,3 +488,8 @@ def save_chat_message(username: str, content: str) -> dict:
     write_json(chat_file, data)
 
     return new_message
+
+
+def save_system_message(content: str) -> dict:
+    """儲存系統訊息（由呷爸發送）"""
+    return save_chat_message("呷爸", content)

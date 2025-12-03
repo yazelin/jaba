@@ -2,8 +2,54 @@
   "date": "2025-12-03",
   "store_id": "good-drink-shop",
   "store_name": "好喝飲料店",
-  "orders": [],
-  "item_summary": [],
-  "grand_total": 0,
-  "updated_at": "2025-12-03T11:42:51.382692"
+  "orders": [
+    {
+      "order_id": "2025-12-03-2114162874",
+      "username": "亞澤",
+      "store_id": "sample-store",
+      "store_name": "範例便當店",
+      "items": [
+        {
+          "id": "miso-soup",
+          "name": "味噌湯",
+          "price": 20,
+          "quantity": 1,
+          "size": null,
+          "note": "",
+          "calories": 80
+        }
+      ],
+      "total": 20
+    },
+    {
+      "order_id": "2025-12-03-2116133024",
+      "username": "亞澤",
+      "store_id": "good-drink-shop",
+      "store_name": "好喝飲料店",
+      "items": [
+        {
+          "id": "item-5-10",
+          "name": "泰式榴槤莎莎",
+          "price": 110,
+          "quantity": 1,
+          "size": null,
+          "note": "",
+          "calories": 180
+        }
+      ],
+      "total": 110
+    }
+  ],
+  "item_summary": [
+    {
+      "name": "味噌湯",
+      "quantity": 1
+    },
+    {
+      "name": "泰式榴槤莎莎",
+      "quantity": 1
+    }
+  ],
+  "grand_total": 130,
+  "updated_at": "2025-12-03T21:16:13.302662"
 }

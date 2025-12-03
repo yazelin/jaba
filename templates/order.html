@@ -89,11 +89,11 @@
     </div>
   </div>
 
-  <!-- 團隊聊天室 -->
+  <!-- 美食評論區 -->
   <div class="team-chat" id="team-chat">
     <div class="team-chat-header" onclick="toggleTeamChat()">
       <span class="team-chat-title">
-        <span>💬 團隊聊天室</span>
+        <span>💬 美食評論區</span>
         <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
       </span>
       <button class="team-chat-toggle" id="chat-toggle-btn">▼</button>
@@ -150,31 +150,34 @@
     // === 今日資訊與菜單 ===
     let todayStores = [];  // 多店家資料
 
-    async function loadTodayInfo() {
+    async function loadTodayInfo(forUsername = null) {
       try {
-        const res = await fetch('/api/today');
+        const url = forUsername ? `/api/today?username=${encodeURIComponent(forUsername)}` : '/api/today';
+        const res = await fetch(url);
         const data = await res.json();
         todayInfo = data.today;
         todaySummary = data.summary;
         todayStores = data.stores || [];
 
-        // 更新店家資訊面板（支援多店家）
-        updateStoreInfoPanel(data.today, data.stores);
+        // 更新店家資訊面板
+        updateStoreInfoPanel(data.stores);
 
         // 更新菜單面板（支援多店家）
         updateMenuPanel(data.stores);
 
         // 更新訂單面板
         updateOrdersPanel(data.summary);
+
+        return data.preferred_name;
       } catch (err) {
         console.error('載入今日資訊失敗:', err);
+        return null;
       }
     }
 
-    function updateStoreInfoPanel(today, stores) {
+    function updateStoreInfoPanel(stores) {
       const content = document.getElementById('store-info-content');
 
-      // 支援多店家
       if (stores && stores.length > 0) {
         let html = '';
         stores.forEach((storeData, index) => {
@@ -182,21 +185,18 @@
           if (store) {
             if (index > 0) html += '<div class="store-divider"></div>';
             html += `<div class="store-title">${store.name}</div>`;
+            if (store.phone) {
+              html += `<div class="store-phone">電話：${store.phone}</div>`;
+            }
             if (store.note) {
               html += `<div class="store-note">${store.note}</div>`;
             }
           }
         });
         content.innerHTML = html || '<div class="no-store-msg">尚未設定今日店家</div>';
-        return;
-      }
-
-      // 向後相容：單店家
-      if (!today || !today.store_name) {
+      } else {
         content.innerHTML = '<div class="no-store-msg">尚未設定今日店家</div>';
-        return;
       }
-      content.innerHTML = `<div class="store-title">${today.store_name}</div>`;
     }
 
     function updateMenuPanel(stores) {
@@ -222,12 +222,29 @@
               category.items.forEach(item => {
                 const unavailableClass = item.available === false ? ' unavailable' : '';
                 const escapedName = item.name.replace(/'/g, "\\'");
-                html += `
-                  <div class="menu-item${unavailableClass}" onclick="quickOrder('${escapedName}', ${item.price}, '${store.id}')" title="${item.description || ''}">
-                    <span class="menu-item-name">${item.name}</span>
-                    <span class="menu-item-price">$${item.price}</span>
-                  </div>
-                `;
+
+                if (item.variants && item.variants.length > 0) {
+                  // 有尺寸變體：顯示品項名稱和各尺寸選項
+                  html += `
+                    <div class="menu-item-with-variants${unavailableClass}" title="${item.description || ''}">
+                      <span class="menu-item-name">${item.name}</span>
+                      <div class="menu-item-variants">
+                        ${item.variants.map(v => {
+                          const escapedSize = v.name.replace(/'/g, "\\'");
+                          return `<span class="menu-variant-btn" onclick="quickOrder('${escapedName} ${escapedSize}', ${v.price}, '${store.id}')">${v.name} $${v.price}</span>`;
+                        }).join('')}
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  // 無尺寸變體：原本的顯示方式
+                  html += `
+                    <div class="menu-item${unavailableClass}" onclick="quickOrder('${escapedName}', ${item.price}, '${store.id}')" title="${item.description || ''}">
+                      <span class="menu-item-name">${item.name}</span>
+                      <span class="menu-item-price">$${item.price}</span>
+                    </div>
+                  `;
+                }
               });
               html += `</div>`;
             });
@@ -293,10 +310,12 @@
             order.items.forEach(item => {
               const itemCalories = item.calories ? ` (${item.calories}大卡)` : '';
               const itemQty = item.quantity > 1 ? ` x${item.quantity}` : '';
+              const itemNote = item.note ? `<div class="live-order-note">${item.note}</div>` : '';
               html += `
                 <div class="live-order-item">
                   <div>
                     <div class="live-order-items">${item.name}${itemQty}${itemCalories}</div>
+                    ${itemNote}
                   </div>
                   <div class="live-order-total">$${item.price * item.quantity}</div>
                 </div>
@@ -312,10 +331,12 @@
           order.items.forEach(item => {
             const itemCalories = item.calories ? ` (${item.calories}大卡)` : '';
             const itemQty = item.quantity > 1 ? ` x${item.quantity}` : '';
+            const itemNote = item.note ? `<div class="live-order-note">${item.note}</div>` : '';
             html += `
               <div class="live-order-item">
                 <div>
                   <div class="live-order-items">${item.name}${itemQty}${itemCalories}</div>
+                  ${itemNote}
                 </div>
                 <div class="live-order-total">$${item.price * item.quantity}</div>
               </div>
@@ -366,7 +387,11 @@
           html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
 
           orders.forEach(order => {
-            const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+            const itemsText = order.items.map(i => {
+              let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
+              if (i.note) text += ` (${i.note})`;
+              return text;
+            }).join('、');
             html += `
               <div class="live-order-item">
                 <div>
@@ -381,7 +406,11 @@
       } else {
         // 單店家：直接列出
         summary.orders.forEach(order => {
-          const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+          const itemsText = order.items.map(i => {
+            let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
+            if (i.note) text += ` (${i.note})`;
+            return text;
+          }).join('、');
           html += `
             <div class="live-order-item">
               <div>
@@ -426,7 +455,7 @@
     }
 
     // 開始對話
-    function startChat() {
+    async function startChat() {
       const input = document.getElementById('username-input');
       username = input.value.trim();
 
@@ -438,6 +467,13 @@
       // 儲存名字到 localStorage
       localStorage.setItem('jaba_username', username);
 
+      // 重置 session，確保每次進入都是新對話
+      await fetch('/api/session/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, is_manager: false })
+      });
+
       // 隱藏名稱輸入，顯示對話區域和左右面板
       document.getElementById('name-input-section').style.display = 'none';
       document.getElementById('chat-messages').style.display = 'block';
@@ -445,23 +481,25 @@
       document.getElementById('left-panel').style.display = 'flex';
       document.getElementById('right-panel').style.display = 'flex';
 
-      // 載入今日資訊
-      loadTodayInfo();
+      // 載入今日資訊並取得偏好稱呼
+      const preferredName = await loadTodayInfo(username);
+      const displayName = preferredName || '我們';
 
       // 根據今日店家顯示不同的歡迎訊息
-      let welcomeMsg = `嗨 ${username}！我是呷爸，今天想吃什麼呢？\n\n`;
-      // 支援多店家
+      let welcomeMsg = `哇係呷爸，${displayName}今天想吃什麼呢？\n\n`;
+      // 依店家數量顯示不同訊息
       if (todayStores && todayStores.length > 1) {
         const storeNames = todayStores.map(s => s.store?.name).filter(Boolean).join('、');
-        welcomeMsg += `今天有 ${todayStores.length} 家店可以選：${storeNames}。\n`;
-        welcomeMsg += `你可以直接點左邊菜單上的品項，或是告訴我你想點什麼！\n\n`;
-        welcomeMsg += `不知道吃什麼？可以問我「今天吃什麼好？」`;
-      } else if (todayInfo && todayInfo.store_name) {
-        welcomeMsg += `今天的店家是「${todayInfo.store_name}」，`;
-        welcomeMsg += `你可以直接點左邊菜單上的品項，或是告訴我你想點什麼！\n\n`;
-        welcomeMsg += `不知道吃什麼？可以問我「今天吃什麼好？」`;
+        welcomeMsg += `今天有 ${todayStores.length} 家店可以選：${storeNames}～\n`;
+        welcomeMsg += `直接點左邊菜單的品項，或跟我說想吃什麼！\n\n`;
+        welcomeMsg += `不知道吃什麼？問我「今天吃什麼好？」`;
+      } else if (todayStores && todayStores.length === 1) {
+        const storeName = todayStores[0].store?.name || '';
+        welcomeMsg += `今天的店家是「${storeName}」～\n`;
+        welcomeMsg += `直接點左邊菜單的品項，或跟我說想吃什麼！\n\n`;
+        welcomeMsg += `不知道吃什麼？問我「今天吃什麼好？」`;
       } else {
-        welcomeMsg += `你可以問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n• 查詢我的訂單`;
+        welcomeMsg += `問我：\n• 今天有什麼可以吃？\n• 看看菜單\n• 我要點雞腿便當\n\n有什麼偏好或需要建議嗎？`;
       }
       addMessage('assistant', welcomeMsg);
 
@@ -509,15 +547,25 @@
         addMessage('assistant', data.message || '抱歉，我沒有理解你的意思。');
 
         // 如果有執行動作，顯示結果
-        if (data.action_result) {
-          if (data.action_result.success) {
-            if (data.action_result.event === 'order_created') {
-              addMessage('assistant', '✅ 訂單已建立！你可以在看板上看到你的訂單。');
-            } else if (data.action_result.event === 'order_cancelled') {
-              addMessage('assistant', '✅ 訂單已取消。');
+        if (data.action_results && data.action_results.length > 0) {
+          for (const result of data.action_results) {
+            if (result.success) {
+              if (result.event === 'order_created') {
+                addMessage('assistant', '✅ 訂單已建立！你可以在看板上看到你的訂單。');
+                // 更新訂單面板
+                if (result.summary) updateOrdersPanel(result.summary);
+              } else if (result.event === 'order_cancelled') {
+                addMessage('assistant', '✅ 訂單已取消。');
+                // 更新訂單面板
+                if (result.summary) updateOrdersPanel(result.summary);
+              } else if (result.event === 'order_updated') {
+                addMessage('assistant', '✅ 訂單已更新。');
+                // 更新訂單面板
+                if (result.summary) updateOrdersPanel(result.summary);
+              }
+            } else if (result.error) {
+              addMessage('assistant', `❌ 操作失敗：${result.error}`);
             }
-          } else if (data.action_result.error) {
-            addMessage('assistant', `❌ 操作失敗：${data.action_result.error}`);
           }
         }
 
@@ -528,10 +576,13 @@
       }
     }
 
+    // 訊息 ID 計數器
+    let messageIdCounter = 0;
+
     // 添加訊息到對話區域
     function addMessage(role, content) {
       const messagesEl = document.getElementById('chat-messages');
-      const id = 'msg-' + Date.now();
+      const id = 'msg-' + Date.now() + '-' + (messageIdCounter++);
 
       const msgEl = document.createElement('div');
       msgEl.id = id;
@@ -580,6 +631,16 @@
       }
     });
 
+    socket.on('order_updated', (data) => {
+      // 更新訂單面板（品項移除或修改時）
+      if (data.summary) {
+        updateOrdersPanel(data.summary);
+      } else {
+        // 如果沒帶 summary，重新載入
+        loadTodayInfo();
+      }
+    });
+
     socket.on('orders_cleared', (data) => {
       // 清空訂單面板
       updateOrdersPanel(null);
@@ -608,7 +669,7 @@
       if (e.key === 'Enter') startChat();
     });
 
-    // === 團隊聊天室 ===
+    // === 美食評論區 ===
     let teamChatOpen = true;  // 預設展開
     let unreadCount = 0;
 

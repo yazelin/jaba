@@ -2,13 +2,27 @@
   "date": "2025-12-03",
   "stores": [
     {
-      "store_id": "coco",
-      "store_name": "CoCo都可茶飲",
+      "store_id": "good-drink-shop",
+      "store_name": "好喝飲料店",
       "status": "open",
       "set_by": "管理員",
-      "set_at": "2025-12-03T14:12:51.829720"
+      "set_at": "2025-12-03T16:21:42.919786"
+    },
+    {
+      "store_id": "store-53bd19c0",
+      "store_name": "測試茶店",
+      "status": "open",
+      "set_by": "管理員",
+      "set_at": "2025-12-03T18:45:00.494844"
+    },
+    {
+      "store_id": "sample-store",
+      "store_name": "範例便當店",
+      "status": "open",
+      "set_by": "管理員",
+      "set_at": "2025-12-03T19:07:46.919128"
     }
   ],
-  "store_id": "coco",
-  "store_name": "CoCo都可茶飲"
+  "store_id": "good-drink-shop",
+  "store_name": "好喝飲料店"
 }

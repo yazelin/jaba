@@ -63,8 +63,8 @@ async def manager_page():
 
 
 @app.get("/api/today")
-async def get_today():
-    """取得今日資訊（支援多店家）"""
+async def get_today(username: str = None):
+    """取得今日資訊"""
     today_info = data.get_today_info()
     summary = data.get_daily_summary()
 
@@ -81,16 +81,18 @@ async def get_today():
                     "menu": menu_info
                 })
 
-    # 向後相容：保留單店家欄位
-    store_info = None
-    if today_info.get("store_id"):
-        store_info = data.get_store(today_info["store_id"])
+    # 取得使用者偏好稱呼
+    preferred_name = None
+    if username:
+        profile = data.get_user_profile(username)
+        if profile:
+            preferred_name = profile.get("preferences", {}).get("preferred_name")
 
     return {
         "today": today_info,
-        "store": store_info,  # 向後相容
-        "stores": stores_detail,  # 多店家資訊
-        "summary": summary
+        "stores": stores_detail,
+        "summary": summary,
+        "preferred_name": preferred_name
     }
 
 
@@ -130,6 +132,40 @@ async def get_payments():
     return payments or {"records": [], "total_collected": 0, "total_pending": 0}
 
 
+@app.post("/api/refund")
+async def mark_refund(request: Request):
+    """標記已退款"""
+    body = await request.json()
+    username = body.get("username")
+
+    if not username:
+        return JSONResponse({"error": "缺少 username"}, status_code=400)
+
+    result = claude._mark_refunded({"username": username})
+
+    if result.get("success"):
+        await broadcast_event("payment_updated", {"username": username})
+
+    return result
+
+
+@app.post("/api/mark-paid")
+async def mark_paid(request: Request):
+    """標記已付款"""
+    body = await request.json()
+    username = body.get("username")
+
+    if not username:
+        return JSONResponse({"error": "缺少 username"}, status_code=400)
+
+    result = claude._mark_paid({"username": username})
+
+    if result.get("success"):
+        await broadcast_event("payment_updated", {"username": username})
+
+    return result
+
+
 @app.post("/api/chat")
 async def chat(request: Request):
     """與 AI 對話"""
@@ -146,14 +182,11 @@ async def chat(request: Request):
     # 呼叫 Claude
     response = claude.call_claude(username, message, is_manager)
 
-    # 執行動作（支援單一 action 或多個 actions）
-    action = response.get("action")
-    actions = response.get("actions")
-    action_result = None
-    action_results = None
+    # 執行動作
+    actions = response.get("actions", [])
+    action_results = []
 
-    # 優先處理 actions 陣列
-    if actions and isinstance(actions, list):
+    if actions:
         action_results = claude.execute_actions(username, actions, is_manager)
 
         # 廣播每個動作的事件
@@ -167,26 +200,16 @@ async def chat(request: Request):
                     "store_name": result.get("store_name"),
                 }
                 await broadcast_event(event_type, event_data)
-    elif action:
-        # 向後相容：單一 action
-        action_result = claude.execute_action(username, action, is_manager)
 
-        # 廣播事件
-        if action_result.get("success") and action_result.get("event"):
-            event_type = action_result["event"]
-            event_data = {
-                "username": username,
-                "summary": action_result.get("summary"),
-                "today": action_result.get("today"),
-                "store_name": action_result.get("store_name"),
-            }
-            await broadcast_event(event_type, event_data)
+                # 店家變更時，在團體聊天室新增系統訊息
+                if event_type == "store_changed" and result.get("store_name"):
+                    store_name = result.get("store_name")
+                    message = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
+                    await sio.emit("chat_message", message)
 
     return {
         "message": response.get("message", ""),
-        "action": action,
         "actions": actions,
-        "action_result": action_result,
         "action_results": action_results
     }
 
@@ -217,6 +240,21 @@ async def send_chat_message(request: Request):
     await sio.emit("chat_message", message)
 
     return {"success": True, "message": message}
+
+
+@app.post("/api/session/reset")
+async def reset_session(request: Request):
+    """重置使用者的 Claude session"""
+    body = await request.json()
+    username = body.get("username", "").strip()
+    is_manager = body.get("is_manager", False)
+
+    if not username:
+        return JSONResponse({"error": "請輸入名稱"}, status_code=400)
+
+    # 清除 session
+    cleared = data.clear_session_id(username, is_manager)
+    return {"success": True, "cleared": cleared}
 
 
 @app.post("/api/verify-admin")
@@ -285,6 +323,20 @@ async def recognize_menu(request: Request):
         "recognized_menu": result.get("menu"),
         "warnings": result.get("warnings", [])
     }
+
+
+@app.post("/api/store/{store_id}/toggle")
+async def toggle_store_active(store_id: str):
+    """切換店家啟用狀態"""
+    store = data.get_store(store_id)
+    if not store:
+        return JSONResponse({"error": "找不到店家"}, status_code=404)
+
+    # 切換狀態
+    store["active"] = not store.get("active", True)
+    data.save_store(store_id, store)
+
+    return {"success": True, "active": store["active"]}
 
 
 @app.post("/api/save-menu")

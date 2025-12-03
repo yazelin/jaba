@@ -21,11 +21,11 @@ MODE="${1:-prod}"
 case "$MODE" in
     dev|development)
         echo "啟動開發模式 (auto-reload)..."
-        uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098 --limit-max-request-size 20971520
+        uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
         ;;
     prod|production)
         echo "啟動生產模式..."
-        uv run uvicorn main:socket_app --host 0.0.0.0 --port 8098 --limit-max-request-size 20971520
+        uv run uvicorn main:socket_app --host 0.0.0.0 --port 8098
         ;;
     *)
         echo "用法: $0 [dev|prod]"

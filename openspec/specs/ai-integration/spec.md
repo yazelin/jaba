@@ -11,19 +11,31 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **THEN** 後端執行 `claude -p` 命令並解析 JSON 回應
 
 ### Requirement: Session 管理
-系統 SHALL 為每個使用者每天維護獨立的 Claude session，儲存於 `users/{username}/sessions/{date}.txt`。
+系統 SHALL 在使用者每次進入對話頁面時重置 session，並在同一次訪問內維持對話延續。
 
-#### Scenario: 新使用者首次對話
-- **WHEN** 使用者今日首次發送訊息
-- **THEN** 建立新 session 並儲存 session ID
+#### Scenario: 進入訂購頁重置 session
+- **GIVEN** 使用者輸入名字點擊「開始訂餐」
+- **WHEN** 前端執行 `startChat()`
+- **THEN** 先呼叫 `/api/session/reset` 清除舊 session
+- **AND** 後續對話會建立新的 session
 
-#### Scenario: 繼續對話
-- **WHEN** 使用者今日已有 session
-- **THEN** 使用 `claude -r [sessionId]` 繼續對話
+#### Scenario: 進入管理頁重置 session
+- **GIVEN** 管理員進入管理頁面
+- **WHEN** 頁面初始化
+- **THEN** 呼叫 `/api/session/reset`（is_manager=true）清除舊 session
+- **AND** 後續對話會建立新的 session
 
-#### Scenario: 隔天新 session
-- **WHEN** 使用者隔天使用系統
-- **THEN** 建立新的 session，不延續昨日對話
+#### Scenario: 同一次訪問內延續對話
+- **GIVEN** 使用者已開始對話且尚未離開頁面
+- **WHEN** 使用者繼續發送訊息
+- **THEN** 使用 `--resume` 延續同一個 session
+- **AND** AI 能理解對話上下文（如確認型回應「好」、「對」）
+
+#### Scenario: 重新進入頁面
+- **GIVEN** 使用者重新整理頁面或重新進入
+- **WHEN** 再次執行 `startChat()` 或管理頁初始化
+- **THEN** 重置 session，開始全新對話
+- **AND** 呷爸不會混淆先前訪問的對話內容
 
 ### Requirement: 前端名稱暫存
 系統 SHALL 在前端使用 localStorage 儲存使用者名稱，下次自動填入。
@@ -37,11 +49,19 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **THEN** 自動填入上次使用的名稱
 
 ### Requirement: AI 動作執行
-系統 SHALL 根據 AI 回應的 action 執行對應操作並廣播事件。
+系統 SHALL 統一使用 `actions` 陣列格式處理 AI 回應的動作。
 
-#### Scenario: 執行建立訂單
-- **WHEN** AI 回應 action.type 為 create_order
-- **THEN** 建立訂單、更新彙整、廣播 order_created
+#### Scenario: AI 回應動作
+- **GIVEN** AI 回應訊息
+- **WHEN** 回應包含需要執行的動作
+- **THEN** 使用 `actions` 陣列格式
+- **AND** 不使用單一 `action` 欄位
+
+#### Scenario: 執行動作
+- **GIVEN** 收到 AI 回應
+- **WHEN** 處理動作
+- **THEN** 只從 `actions` 陣列讀取動作
+- **AND** 不檢查 `action` 單一欄位
 
 ### Requirement: 對話上下文延續
 系統 SHALL 維護使用者的對話上下文，讓 AI 能記住之前的對話內容。
@@ -66,7 +86,7 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **AND** 執行之前提議的動作
 
 ### Requirement: 歡迎訊息流程
-系統 SHALL 使用靜態歡迎訊息讓使用者立即看到回應，建議功能改為使用者主動詢問。
+系統 SHALL 使用靜態歡迎訊息讓使用者立即看到回應，歡迎詞風格活潑親切。
 
 #### Scenario: 管理員靜態歡迎訊息
 - **GIVEN** 管理員成功登入
@@ -78,7 +98,7 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 #### Scenario: 一般使用者靜態歡迎訊息
 - **GIVEN** 使用者輸入名字開始訂餐
 - **WHEN** 進入訂餐模式
-- **THEN** 立即顯示靜態歡迎訊息
+- **THEN** 立即顯示靜態歡迎訊息：「嗨！哇係呷爸，今天想吃什麼呢？」
 - **AND** 訊息包含今日店家資訊
 - **AND** 訊息包含提示「不知道吃什麼？可以問我建議」
 
@@ -86,18 +106,46 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **GIVEN** 使用者已進入系統
 - **WHEN** 使用者詢問「今天吃什麼好」或類似問題
 - **THEN** AI 根據 prompt 中的建議邏輯回應
-- **AND** 管理員會收到店家建議（根據 recent_store_history）
-- **AND** 一般使用者會收到餐點建議或健康提醒
+- **AND** 參考使用者 profile 中的偏好進行個人化推薦
 
 ### Requirement: 呷爸個性設定
-系統 SHALL 在 prompts 中定義呷爸為「成熟穩重的大叔」形象，語氣溫和有條理，給人信賴感。
+系統 SHALL 在 prompts 中定義呷爸為「親切可愛」的形象，語氣活潑自然，讓人感到溫暖有人情味，並使用「我們」營造一起決定的參與感。
 
 #### Scenario: 呷爸對話風格
 - **GIVEN** 使用者或管理員與呷爸對話
 - **WHEN** 呷爸回應
-- **THEN** 使用成熟穩重的語氣
-- **AND** 說話有條理、不過度熱情
-- **AND** 給人可靠的大叔形象
+- **THEN** 使用親切可愛的語氣
+- **AND** 說話簡潔自然、不冗長
+- **AND** 可以適時使用口語化表達（如「哇係呷爸」）
+- **AND** 盡量使用「我們」代替「你」，營造一起決定的感覺
+
+#### Scenario: 稱呼使用者
+- **GIVEN** 呷爸需要稱呼使用者
+- **WHEN** 使用者沒有設定稱呼偏好
+- **THEN** 盡量使用「我們」而非「你」
+- **AND** 不使用性別代稱（如先生、小姐）
+
+#### Scenario: 使用個人化稱呼
+- **GIVEN** 呷爸需要稱呼使用者
+- **WHEN** 使用者在 profile 中設定了稱呼偏好
+- **THEN** 使用使用者偏好的稱呼
+
+#### Scenario: 提供建議時的語氣
+- **GIVEN** 呷爸要根據歷史記錄提供建議
+- **WHEN** 回應使用者
+- **THEN** 不說「根據最近的訂餐記錄」等機械化用語
+- **AND** 直接說「昨天訂過 xxx，今天要不要試 ooo」
+- **AND** 只有當使用者主動詢問歷史時才詳細說明
+
+#### Scenario: 管理員對話風格
+- **GIVEN** 管理員與呷爸對話
+- **WHEN** 討論今日店家
+- **THEN** 使用「我們今天要訂哪家店呢？」等參與感用語
+
+#### Scenario: 訂購者對話風格
+- **GIVEN** 訂購者與呷爸對話
+- **WHEN** 討論要吃什麼
+- **THEN** 使用「我們今天想吃什麼呢？」等參與感用語
 
 ### Requirement: 健康飲食提醒與卡路里估算
 系統 SHALL 在 `user_prompt` 中加入健康飲食提醒邏輯，當使用者點餐時適時推薦較健康的選項，並估算餐點卡路里。
@@ -191,4 +239,116 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **WHEN** 建立 CLI 命令
 - **THEN** 直接使用簡稱作為 `--model` 參數值
 - **AND** 支援 `haiku`、`sonnet`、`opus` 等簡稱
+
+### Requirement: 使用者偏好記憶
+系統 SHALL 支援呷爸在對話中記錄使用者偏好，並在後續對話中參考這些偏好。
+
+#### Scenario: 記錄飲食偏好
+- **GIVEN** 使用者告知呷爸飲食限制（如「我不吃辣」）
+- **WHEN** 呷爸理解並回應
+- **THEN** 執行 `update_user_profile` 動作記錄偏好
+- **AND** 下次點餐時可根據偏好推薦
+
+#### Scenario: 記錄稱呼偏好
+- **GIVEN** 使用者告知希望被稱呼的方式
+- **WHEN** 呷爸理解並回應
+- **THEN** 執行 `update_user_profile` 動作記錄稱呼
+- **AND** 後續對話使用該稱呼
+
+#### Scenario: 主動詢問偏好
+- **GIVEN** 使用者首次與呷爸互動
+- **AND** profile 中偏好資料為空
+- **WHEN** 呷爸適時詢問（如「你有什麼不吃的嗎？我記下來方便推薦」）
+- **AND** 使用者回答
+- **THEN** 記錄使用者的回答到 profile
+
+### Requirement: 更新使用者 Profile 動作
+系統 SHALL 提供 `update_user_profile` 動作讓 AI 可以更新使用者的偏好設定。
+
+#### Scenario: AI 執行 profile 更新
+- **GIVEN** AI 回應包含 `action.type` 為 `update_user_profile`
+- **WHEN** 系統執行該動作
+- **THEN** 更新 `users/{username}/profile.json` 中的對應欄位
+- **AND** 回傳更新成功訊息
+
+#### Scenario: 更新飲食限制
+- **GIVEN** AI 回應 `update_user_profile` 動作
+- **AND** `action.data` 包含 `dietary_restrictions` 欄位
+- **WHEN** 系統執行動作
+- **THEN** 更新 profile 的 `preferences.dietary_restrictions` 陣列
+
+#### Scenario: 更新稱呼偏好
+- **GIVEN** AI 回應 `update_user_profile` 動作
+- **AND** `action.data` 包含 `preferred_name` 欄位
+- **WHEN** 系統執行動作
+- **THEN** 更新 profile 的 `preferences.preferred_name` 欄位
+
+### Requirement: AI 上下文包含使用者偏好
+系統 SHALL 在 `build_context()` 中包含使用者的 profile 偏好資訊，讓 AI 能參考進行個人化回應。
+
+#### Scenario: Context 包含偏好
+- **GIVEN** 呼叫 `build_context(username)`
+- **WHEN** 該使用者有設定偏好
+- **THEN** context 包含 `user_profile` 欄位
+- **AND** 包含 `preferred_name`、`dietary_restrictions` 等資訊
+
+### Requirement: 菜單辨識尺寸變體
+系統 SHALL 在辨識菜單圖片時，自動提取品項的尺寸變體資訊。
+
+#### Scenario: 辨識多尺寸品項
+- **GIVEN** 菜單圖片顯示 M/L、大/中/小、大碗/小碗等尺寸價格
+- **WHEN** AI 辨識菜單
+- **THEN** 輸出 `variants` 陣列包含各尺寸名稱和價格
+- **AND** `price` 欄位填入最小尺寸的價格
+
+#### Scenario: 無尺寸區分
+- **GIVEN** 菜單品項只有單一價格
+- **WHEN** AI 辨識菜單
+- **THEN** 不產生 `variants` 欄位
+- **AND** `price` 欄位填入該價格
+
+### Requirement: AI 對話編輯尺寸變體
+系統 SHALL 支援管理員透過對話讓 AI 編輯品項的尺寸價格。
+
+#### Scenario: 修改尺寸價格
+- **GIVEN** 管理員說「把珍珠奶茶的 L 杯改成 65 元」
+- **WHEN** AI 執行 `update_item_variants` 動作
+- **THEN** 更新該品項的 L 尺寸價格為 65
+
+#### Scenario: 新增尺寸
+- **GIVEN** 管理員說「幫雞腿便當加一個大份選項，100元」
+- **WHEN** AI 執行 `update_item_variants` 動作
+- **THEN** 在該品項的 variants 中新增大份尺寸
+
+### Requirement: AI 訂單操作指引
+系統 SHALL 在 prompt 中指示呷爸根據使用者意圖選擇正確的訂單動作。
+
+#### Scenario: 呷爸查看現有訂單
+- **GIVEN** 使用者要求修改訂單
+- **WHEN** 呷爸處理請求
+- **THEN** 先查看 context 中的 `current_orders`
+- **AND** 了解使用者目前有哪些訂單和品項
+
+#### Scenario: 呷爸移除品項
+- **GIVEN** 使用者說「不要 X」或「取消 X」
+- **AND** `current_orders` 中有品項 X
+- **WHEN** 呷爸執行動作
+- **THEN** 使用 `remove_item` 動作
+- **AND** 不使用 `create_order`
+
+#### Scenario: 呷爸新增品項
+- **GIVEN** 使用者說「加一個 X」或「我要 X」
+- **AND** `current_orders` 中沒有品項 X（或使用者明確要新增）
+- **WHEN** 呷爸執行動作
+- **THEN** 使用 `create_order` 動作
+
+### Requirement: remove_item 動作格式
+系統 SHALL 支援 `remove_item` 動作讓 AI 從現有訂單移除品項。
+
+#### Scenario: AI 執行 remove_item
+- **GIVEN** AI 回應包含 `action.type` 為 `remove_item`
+- **AND** `action.data` 包含 `item_name` 和可選的 `quantity`
+- **WHEN** 系統執行該動作
+- **THEN** 從使用者訂單中移除指定品項
+- **AND** 回傳更新後的訂單狀態
 

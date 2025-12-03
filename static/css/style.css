@@ -152,6 +152,13 @@ body::before {
   display: inline-block;
 }
 
+/* 店家電話 */
+.store-phone {
+  font-size: 0.5em;
+  color: #5D4037;
+  margin-top: 8px;
+}
+
 /* 多店家分隔線（看板頁） */
 .store-divider-board {
   height: 2px;
@@ -608,7 +615,7 @@ body::before {
   }
 }
 
-/* 團隊聊天室 */
+/* 美食評論區 */
 .team-chat {
   position: fixed;
   bottom: 20px;
@@ -754,19 +761,6 @@ body::before {
   margin-left: 8px;
 }
 
-/* 訂餐頁面佈局 - 舊版兩欄（保留向後相容） */
-.order-page-layout {
-  display: flex;
-  gap: 20px;
-  height: calc(100vh - 40px);
-}
-
-.order-page-layout .chat-container {
-  flex: 1;
-  min-width: 0;
-  margin-top: 0;
-}
-
 /* 訂餐頁面三欄佈局 */
 .order-three-columns {
   display: flex;
@@ -857,6 +851,12 @@ body::before {
   font-weight: bold;
   color: #5D4037;
   margin-bottom: 8px;
+}
+
+.store-info-panel .store-phone {
+  font-size: 0.9em;
+  color: #5D4037;
+  margin-top: 8px;
 }
 
 .store-info-panel .store-note {
@@ -959,6 +959,52 @@ body::before {
   transform: none;
 }
 
+/* 有尺寸變體的菜單品項 */
+.menu-item-with-variants {
+  padding: 8px 10px;
+  background: #FFF8DC;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.menu-item-with-variants .menu-item-name {
+  font-weight: 500;
+  color: #333;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.menu-item-with-variants .menu-item-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.menu-variant-btn {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #8B6914;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.menu-variant-btn:hover {
+  background: #6B4F0A;
+  transform: scale(1.05);
+}
+
+.menu-item-with-variants.unavailable {
+  opacity: 0.5;
+}
+
+.menu-item-with-variants.unavailable .menu-variant-btn {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* 即時訂單面板 */
 .orders-panel .panel-content {
   max-height: 250px;
@@ -1012,6 +1058,13 @@ body::before {
 .live-order-items {
   font-size: 0.85em;
   color: #666;
+}
+
+.live-order-note {
+  font-size: 0.8em;
+  color: #888;
+  font-style: italic;
+  margin-top: 2px;
 }
 
 .live-order-total {
@@ -1091,8 +1144,57 @@ body::before {
 }
 
 .payment-status.pending {
+  background: #95a5a6;
+  color: white;
+}
+
+.payment-status.partial {
   background: #f39c12;
   color: white;
+}
+
+.payment-status.refund {
+  background: #3498db;
+  color: white;
+}
+
+.payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-paid {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-paid:hover {
+  background: #219a52;
+}
+
+.btn-refund {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #3498db;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-refund:hover {
+  background: #2980b9;
+}
+
+.payment-note {
+  cursor: help;
+  margin-left: 4px;
 }
 
 .payments-summary {
@@ -1177,6 +1279,45 @@ body::before {
 .store-status.inactive {
   background: #95a5a6;
   color: white;
+}
+
+.store-status-btn {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.store-status-btn.active {
+  background: #27ae60;
+}
+
+.store-status-btn.active:hover {
+  background: #219a52;
+}
+
+.store-status-btn.inactive {
+  background: #95a5a6;
+}
+
+.store-status-btn.inactive:hover {
+  background: #7f8c8d;
+}
+
+.store-edit-btn {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #3498db;
+  color: white;
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.store-edit-btn:hover {
+  background: #2980b9;
 }
 
 .store-manage-toggle {
@@ -1482,6 +1623,38 @@ body::before {
   max-width: 800px;
 }
 
+.confirm-modal {
+  max-width: 360px;
+  padding: 24px;
+  text-align: center;
+}
+
+.confirm-modal-body {
+  margin-bottom: 20px;
+}
+
+.confirm-modal-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.confirm-modal-message {
+  font-size: 16px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-modal-actions .btn {
+  min-width: 80px;
+  padding: 10px 20px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -1613,6 +1786,38 @@ body::before {
   margin: 30px auto;
 }
 
+/* 呷爸 Loading 動畫 */
+.loading-jaba {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 30px auto;
+}
+
+.loading-jaba-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.loading-spinner-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 6px solid transparent;
+  border-top: 6px solid #8B6914;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  z-index: 3;
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -1622,6 +1827,7 @@ body::before {
   font-size: 1.1em;
   color: #5D4037;
   margin-top: 15px;
+  text-align: center;
 }
 
 /* 辨識結果編輯 */
@@ -1702,10 +1908,7 @@ body::before {
 }
 
 .result-item {
-  display: grid;
-  grid-template-columns: 1fr 100px 1fr 40px;
-  gap: 10px;
-  align-items: center;
+  display: block;
   padding: 10px;
   border-bottom: 1px solid #EEE;
 }
@@ -1736,6 +1939,66 @@ body::before {
 
 .result-item .item-desc {
   color: #666;
+}
+
+.result-item .item-main-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.result-item .item-variants {
+  margin-top: 8px;
+  margin-left: 20px;
+  padding-left: 10px;
+  border-left: 2px solid #E8D5B5;
+}
+
+.result-item .variant-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.result-item .variant-row span {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.result-item .variant-name {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.result-item .variant-price {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85em;
+  text-align: center;
+}
+
+.btn-add-variant {
+  background: none;
+  border: none;
+  color: #8B6914;
+  font-size: 0.85em;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.btn-add-variant:hover {
+  text-decoration: underline;
+}
+
+.btn-icon.btn-sm {
+  padding: 2px 6px;
+  font-size: 0.8em;
 }
 
 .delete-item-btn {
@@ -1820,13 +2083,12 @@ body::before {
     max-height: 95vh;
   }
 
-  .result-item {
-    grid-template-columns: 1fr 80px auto;
-    gap: 8px;
+  .result-item .item-main-row {
+    flex-wrap: wrap;
   }
 
   .result-item .item-desc {
-    grid-column: 1 / -1;
+    width: 100%;
     margin-top: 5px;
   }
 

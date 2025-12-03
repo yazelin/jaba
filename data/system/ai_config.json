@@ -3,6 +3,6 @@
     "model": "haiku"
   },
   "menu_recognition": {
-    "model": "sonnet"
+    "model": "opus"
   }
 }

@@ -25,9 +25,9 @@
             <span class="no-store">尚未設定今日店家</span>
           </div>
 
-          <!-- 團隊聊天訊息（唯讀） -->
+          <!-- 美食評論區（唯讀） -->
           <div class="orders-section">
-            <h2 class="section-title">💬 團隊聊天</h2>
+            <h2 class="section-title">💬 美食評論區</h2>
             <div class="chat-readonly" id="chat-readonly">
               <div class="empty-state">
                 <p>尚無聊天訊息</p>
@@ -119,9 +119,9 @@
 
     // 更新看板
     function updateBoard(data) {
-      const { today: todayInfo, store: storeInfo, stores: storesDetail, summary } = data;
+      const { stores: storesDetail, summary } = data;
 
-      // 更新店家名稱（支援多店家）
+      // 更新店家名稱
       const storeNameEl = document.getElementById('store-name');
       if (storesDetail && storesDetail.length > 0) {
         let storeHtml = '';
@@ -130,19 +130,15 @@
           if (store) {
             if (index > 0) storeHtml += '<div class="store-divider-board"></div>';
             storeHtml += `<div class="store-name-item">🏪 ${store.name}</div>`;
+            if (store.phone) {
+              storeHtml += `<div class="store-phone">📞 ${store.phone}</div>`;
+            }
             if (store.note) {
               storeHtml += `<div class="store-note">📌 ${store.note}</div>`;
             }
           }
         });
         storeNameEl.innerHTML = storeHtml || '<span class="no-store">尚未設定今日店家</span>';
-      } else if (todayInfo && todayInfo.store_name) {
-        // 向後相容：單店家
-        let storeHtml = `🏪 ${todayInfo.store_name}`;
-        if (storeInfo && storeInfo.note) {
-          storeHtml += `<div class="store-note">📌 ${storeInfo.note}</div>`;
-        }
-        storeNameEl.innerHTML = storeHtml;
       } else {
         storeNameEl.innerHTML = '<span class="no-store">尚未設定今日店家</span>';
       }
@@ -175,7 +171,7 @@
               <div class="order-card">
                 <div>
                   <div class="order-user">${order.username}</div>
-                  <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+                  <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}${i.note ? ` (${i.note})` : ''}`).join('、')}</div>
                 </div>
                 <div class="order-total">$${order.total}</div>
               </div>
@@ -188,7 +184,7 @@
             <div class="order-card">
               <div>
                 <div class="order-user">${order.username}</div>
-                <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}`).join('、')}</div>
+                <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}${i.note ? ` (${i.note})` : ''}`).join('、')}</div>
               </div>
               <div class="order-total">$${order.total}</div>
             </div>
@@ -294,6 +290,9 @@
           </div>
         `;
       }).join('');
+
+      // 滾動到底部
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
     function addChatMessage(msg) {
@@ -322,6 +321,9 @@
       while (chatEl.children.length > 10) {
         chatEl.removeChild(chatEl.firstChild);
       }
+
+      // 滾動到底部
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
     // 監聽新聊天訊息

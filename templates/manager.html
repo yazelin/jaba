@@ -135,8 +135,11 @@
 
         <!-- 步驟 2：辨識中 -->
         <div id="recognizing-step" class="upload-step" style="display: none;">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">AI 正在辨識菜單，請稍候...</div>
+          <div class="loading-jaba">
+            <img src="/static/images/jaba.png" alt="呷爸" class="loading-jaba-icon">
+            <div class="loading-spinner-ring"></div>
+          </div>
+          <div class="loading-text">呷爸正在努力 key 菜單...</div>
         </div>
 
         <!-- 步驟 3：編輯結果 -->
@@ -146,7 +149,7 @@
             <!-- 動態生成的編輯表格 -->
           </div>
           <div class="result-actions">
-            <button class="btn btn-secondary" onclick="backToUpload()">重新上傳</button>
+            <button class="btn btn-secondary" id="back-btn" onclick="backToUpload()">重新上傳</button>
             <button class="btn btn-primary" onclick="saveRecognizedMenu()">確認並儲存</button>
           </div>
         </div>
@@ -154,11 +157,25 @@
     </div>
   </div>
 
-  <!-- 團隊聊天室 -->
+  <!-- 確認對話框 -->
+  <div class="modal-overlay" id="confirm-modal" style="display: none;">
+    <div class="modal-content confirm-modal">
+      <div class="confirm-modal-body">
+        <div class="confirm-modal-icon" id="confirm-modal-icon">💰</div>
+        <div class="confirm-modal-message" id="confirm-modal-message"></div>
+      </div>
+      <div class="confirm-modal-actions">
+        <button class="btn btn-secondary" onclick="closeConfirmModal()">取消</button>
+        <button class="btn btn-primary" id="confirm-modal-ok">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 美食評論區 -->
   <div class="team-chat" id="team-chat" style="display: none;">
     <div class="team-chat-header" onclick="toggleTeamChat()">
       <span class="team-chat-title">
-        <span>💬 團隊聊天室</span>
+        <span>💬 美食評論區</span>
         <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
       </span>
       <button class="team-chat-toggle" id="chat-toggle-btn">▼</button>
@@ -208,11 +225,12 @@
     requestNotificationPermission();
 
     // === 管理面板資料載入 ===
-    async function loadAdminData() {
+    async function loadAdminData(forUsername = null) {
       try {
         // 同時載入今日資訊和付款資料
+        const todayUrl = forUsername ? `/api/today?username=${encodeURIComponent(forUsername)}` : '/api/today';
         const [todayRes, paymentsRes] = await Promise.all([
-          fetch('/api/today'),
+          fetch(todayUrl),
           fetch('/api/payments')
         ]);
 
@@ -224,19 +242,21 @@
         todayPayments = paymentsData;
         todayStores = todayData.stores || [];
 
-        // 更新各面板（支援多店家）
-        updateStoreInfoPanel(todayData.today, todayData.stores);
+        // 更新各面板
+        updateStoreInfoPanel(todayData.stores);
         updateOrdersPanel(todayData.summary);
         updatePaymentsPanel(paymentsData);
+
+        return todayData.preferred_name;
       } catch (err) {
         console.error('載入管理資料失敗:', err);
+        return null;
       }
     }
 
-    function updateStoreInfoPanel(today, stores) {
+    function updateStoreInfoPanel(stores) {
       const content = document.getElementById('store-info-content');
 
-      // 支援多店家
       if (stores && stores.length > 0) {
         let html = '';
         stores.forEach((storeData, index) => {
@@ -244,21 +264,18 @@
           if (store) {
             if (index > 0) html += '<div class="store-divider"></div>';
             html += `<div class="store-title">${store.name}</div>`;
+            if (store.phone) {
+              html += `<div class="store-phone">電話：${store.phone}</div>`;
+            }
             if (store.note) {
               html += `<div class="store-note">${store.note}</div>`;
             }
           }
         });
         content.innerHTML = html || '<div class="no-store-msg">尚未設定今日店家</div>';
-        return;
-      }
-
-      // 向後相容：單店家
-      if (!today || !today.store_name) {
+      } else {
         content.innerHTML = '<div class="no-store-msg">尚未設定今日店家</div>';
-        return;
       }
-      content.innerHTML = `<div class="store-title">${today.store_name}</div>`;
     }
 
     function updateOrdersPanel(summary) {
@@ -292,7 +309,11 @@
           html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
 
           orders.forEach(order => {
-            const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+            const itemsText = order.items.map(i => {
+              let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
+              if (i.note) text += ` (${i.note})`;
+              return text;
+            }).join('、');
             html += `
               <div class="live-order-item">
                 <div>
@@ -307,7 +328,11 @@
       } else {
         // 單店家：直接列出
         summary.orders.forEach(order => {
-          const itemsText = order.items.map(i => i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name).join('、');
+          const itemsText = order.items.map(i => {
+            let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
+            if (i.note) text += ` (${i.note})`;
+            return text;
+          }).join('、');
           html += `
             <div class="live-order-item">
               <div>
@@ -339,16 +364,48 @@
 
       let html = '';
       payments.records.forEach(record => {
-        const paidClass = record.paid ? ' paid' : '';
-        const statusText = record.paid ? '已付' : '未付';
-        const statusClass = record.paid ? 'paid' : 'pending';
+        const paidAmount = record.paid_amount || 0;
+        const amount = record.amount || 0;
+
+        // 判斷付款狀態
+        let statusText, statusClass, paidClass = '';
+        let showRefundBtn = false;
+        let showPaidBtn = false;
+
+        if (!record.paid && paidAmount > 0) {
+          // 部分已付（待補）
+          statusText = `待補 $${amount - paidAmount}`;
+          statusClass = 'partial';
+          showPaidBtn = true;  // 可以確認付款
+        } else if (record.paid && record.note && record.note.startsWith('待退')) {
+          // 待退款
+          statusText = record.note;
+          statusClass = 'refund';
+          showRefundBtn = true;
+        } else if (record.paid) {
+          // 已付
+          statusText = '已付';
+          statusClass = 'paid';
+          paidClass = ' paid';
+        } else {
+          // 未付
+          statusText = '未付';
+          statusClass = 'pending';
+          showPaidBtn = true;  // 可以確認付款
+        }
+
         html += `
           <div class="payment-item${paidClass}">
             <div>
               <span class="payment-user">${record.username}</span>
-              <span class="payment-amount">$${record.amount}</span>
+              <span class="payment-amount">$${amount}</span>
+              ${record.note && !showRefundBtn ? `<span class="payment-note" title="${record.note}">📝</span>` : ''}
             </div>
-            <span class="payment-status ${statusClass}">${statusText}</span>
+            <div class="payment-actions">
+              ${showPaidBtn ? `<button class="btn-paid" onclick="confirmPaid('${record.username}')">確認付款</button>` : ''}
+              ${showRefundBtn ? `<button class="btn-refund" onclick="confirmRefund('${record.username}')">確認退款</button>` : ''}
+              <span class="payment-status ${statusClass}">${statusText}</span>
+            </div>
           </div>
         `;
       });
@@ -370,6 +427,25 @@
     }
 
     // === 店家管理面板 ===
+    async function toggleStoreActive(storeId) {
+      try {
+        const res = await fetch(`/api/store/${storeId}/toggle`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (data.success) {
+          const statusText = data.active ? '啟用' : '停用';
+          showNotification(`店家已${statusText}`);
+          loadAllStores();
+        } else {
+          showNotification(`切換失敗：${data.error}`);
+        }
+      } catch (err) {
+        console.error('切換店家狀態失敗:', err);
+        showNotification('切換失敗');
+      }
+    }
+
     async function loadAllStores() {
       try {
         const res = await fetch('/api/stores/all');
@@ -394,16 +470,17 @@
         const store = storeData.store;
         const menu = storeData.menu;
         const isActive = store.active !== false;
-        const statusBadge = isActive
-          ? '<span class="store-status active">啟用</span>'
-          : '<span class="store-status inactive">停用</span>';
+        const statusBtn = isActive
+          ? `<button class="store-status-btn active" onclick="event.stopPropagation(); toggleStoreActive('${store.id}')">啟用</button>`
+          : `<button class="store-status-btn inactive" onclick="event.stopPropagation(); toggleStoreActive('${store.id}')">停用</button>`;
 
         html += `
           <div class="store-manage-item">
             <div class="store-manage-header" onclick="toggleStoreMenu('store-menu-${index}')">
               <div class="store-manage-info">
                 <span class="store-manage-name">${store.name}</span>
-                ${statusBadge}
+                <span class="store-edit-btn" onclick="event.stopPropagation(); editStoreMenu('${store.id}')">編輯</span>
+                ${statusBtn}
               </div>
               <span class="store-manage-toggle" id="toggle-${index}">▼</span>
             </div>
@@ -422,10 +499,16 @@
             html += '<div class="menu-cat-items">';
             category.items.forEach(item => {
               const availClass = item.available === false ? ' unavailable' : '';
+              let priceDisplay = '';
+              if (item.variants && item.variants.length > 0) {
+                priceDisplay = item.variants.map(v => `${v.name} $${v.price}`).join(' / ');
+              } else {
+                priceDisplay = `$${item.price}`;
+              }
               html += `
                 <div class="menu-cat-item${availClass}">
                   <span>${item.name}</span>
-                  <span>$${item.price}</span>
+                  <span>${priceDisplay}</span>
                 </div>
               `;
             });
@@ -459,6 +542,35 @@
       }
     }
 
+    // 編輯店家菜單
+    function editStoreMenu(storeId) {
+      // 找到對應的店家資料
+      const storeData = allStores.find(s => s.store.id === storeId);
+      if (!storeData) {
+        alert('找不到店家資料');
+        return;
+      }
+
+      // 設定編輯模式
+      isEditMode = true;
+      targetStoreId = storeId;
+
+      // 載入現有菜單到編輯器（深拷貝避免修改原資料）
+      recognizedMenu = JSON.parse(JSON.stringify(storeData.menu || { categories: [] }));
+
+      // 開啟編輯畫面，直接跳到結果編輯步驟
+      document.getElementById('menu-upload-modal').style.display = 'flex';
+      document.getElementById('upload-step').style.display = 'none';
+      document.getElementById('recognizing-step').style.display = 'none';
+      document.getElementById('result-step').style.display = 'block';
+
+      // 編輯模式：按鈕顯示「取消」
+      document.getElementById('back-btn').textContent = '取消';
+
+      // 顯示編輯畫面
+      showRecognitionResult(recognizedMenu, []);
+    }
+
     // 處理密碼 Enter 鍵
     function handlePasswordKeyPress(event) {
       if (event.key === 'Enter') {
@@ -486,20 +598,28 @@
           document.getElementById('manager-section').style.display = 'block';
           document.getElementById('team-chat').style.display = 'flex';
 
-          // 載入管理資料
-          loadAdminData();
+          // 重置 session，確保每次進入都是新對話
+          await fetch('/api/session/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, is_manager: true })
+          });
+
+          // 載入管理資料並取得偏好稱呼
+          const preferredName = await loadAdminData(username);
           loadAllStores();
 
-          // 顯示靜態歡迎訊息
-          addMessage('assistant', `嗨，管理員！我是呷爸，有什麼需要幫忙的嗎？
+          // 顯示歡迎訊息（使用偏好稱呼）
+          const displayName = preferredName || '我們';
+          addMessage('assistant', `哇係呷爸，${displayName}今天要訂哪家店呢？
 
-你可以：
+可以：
 • 設定今日店家（例：今天吃佳香味便當）
 • 查看今日訂單
 • 查看付款狀態
 • 標記已付款（例：小明已付款）
 
-需要店家建議的話，可以問我「今天訂哪家好？」`);
+需要建議？問我「今天訂哪家好？」`);
 
           document.getElementById('message-input').focus();
           loadChatHistory();
@@ -554,8 +674,8 @@
         // 顯示 AI 回應
         addMessage('assistant', data.message || '收到指令。');
 
-        // 處理動作結果（支援多個 actions）
-        const results = data.action_results || (data.action_result ? [data.action_result] : []);
+        // 處理動作結果
+        const results = data.action_results || [];
         let needReloadStores = false;
         let needReloadAdmin = false;
 
@@ -563,7 +683,7 @@
           if (result.success) {
             let resultMsg = '✅ 操作成功！';
             if (result.event === 'store_changed') {
-              resultMsg = `✅ 已設定今日店家：${result.today?.store_name || ''}`;
+              resultMsg = `✅ 已設定今日店家：${result.store_name || ''}`;
               needReloadAdmin = true;
             }
             // 如果是店家或菜單相關操作，標記需要重新載入
@@ -587,10 +707,13 @@
       }
     }
 
+    // 訊息 ID 計數器
+    let messageIdCounter = 0;
+
     // 添加訊息到對話區域
     function addMessage(role, content) {
       const messagesEl = document.getElementById('chat-messages');
-      const id = 'msg-' + Date.now();
+      const id = 'msg-' + Date.now() + '-' + (messageIdCounter++);
 
       const msgEl = document.createElement('div');
       msgEl.id = id;
@@ -650,6 +773,88 @@
       showNotification(`今日店家已更新：${storeName}`);
     });
 
+    socket.on('payment_updated', (data) => {
+      // 重新載入付款資料
+      loadAdminData();
+      showNotification('付款狀態已更新');
+    });
+
+    // === 確認對話框 ===
+    let confirmModalResolve = null;
+
+    function showConfirmModal(message, icon = '💰') {
+      document.getElementById('confirm-modal-icon').textContent = icon;
+      document.getElementById('confirm-modal-message').textContent = message;
+      document.getElementById('confirm-modal').style.display = 'flex';
+
+      return new Promise((resolve) => {
+        confirmModalResolve = resolve;
+        document.getElementById('confirm-modal-ok').onclick = () => {
+          document.getElementById('confirm-modal').style.display = 'none';
+          confirmModalResolve = null;
+          resolve(true);
+        };
+      });
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').style.display = 'none';
+      if (confirmModalResolve) {
+        confirmModalResolve(false);
+        confirmModalResolve = null;
+      }
+    }
+
+    // 確認付款
+    async function confirmPaid(targetUsername) {
+      const confirmed = await showConfirmModal(`確定要標記 ${targetUsername} 已付款嗎？`, '💵');
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch('/api/mark-paid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: targetUsername })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showNotification(`已確認 ${targetUsername} 付款`);
+          loadAdminData();
+        } else {
+          showNotification(`付款失敗：${data.error}`);
+        }
+      } catch (err) {
+        console.error('付款失敗:', err);
+        showNotification('付款失敗');
+      }
+    }
+
+    // 確認退款
+    async function confirmRefund(targetUsername) {
+      const confirmed = await showConfirmModal(`確定要標記已退款給 ${targetUsername} 嗎？`, '💸');
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch('/api/refund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: targetUsername })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showNotification(`已確認退款給 ${targetUsername}`);
+          loadAdminData();
+        } else {
+          showNotification(`退款失敗：${data.error}`);
+        }
+      } catch (err) {
+        console.error('退款失敗:', err);
+        showNotification('退款失敗');
+      }
+    }
+
     function showNotification(message) {
       const notif = document.createElement('div');
       notif.className = 'notification';
@@ -658,7 +863,7 @@
       setTimeout(() => notif.remove(), 3000);
     }
 
-    // === 團隊聊天室 ===
+    // === 美食評論區 ===
     let teamChatOpen = true;  // 預設展開
     let unreadCount = 0;
 
@@ -767,6 +972,7 @@
     let selectedImage = null;
     let recognizedMenu = null;
     let targetStoreId = null;
+    let isEditMode = false;  // 是否為編輯模式（直接編輯現有菜單）
 
     function openMenuUpload() {
       document.getElementById('menu-upload-modal').style.display = 'flex';
@@ -790,6 +996,7 @@
       selectedImage = null;
       recognizedMenu = null;
       targetStoreId = null;
+      isEditMode = false;
       document.getElementById('upload-step').style.display = 'block';
       document.getElementById('recognizing-step').style.display = 'none';
       document.getElementById('result-step').style.display = 'none';
@@ -800,6 +1007,7 @@
       document.getElementById('target-store-select').value = '';
       document.getElementById('new-store-name').style.display = 'none';
       document.getElementById('new-store-name').value = '';
+      document.getElementById('back-btn').textContent = '重新上傳';
     }
 
     // 處理店家選擇變更
@@ -987,12 +1195,32 @@
     }
 
     function generateItemRow(catIdx, itemIdx, item) {
+      const variants = item.variants || [];
+      let variantsHtml = '';
+
+      if (variants.length > 0) {
+        variantsHtml = variants.map((v, vIdx) => `
+          <div class="variant-row" data-var-idx="${vIdx}">
+            <input type="text" class="variant-name" value="${v.name || ''}" placeholder="尺寸">
+            <span>$</span>
+            <input type="number" class="variant-price" value="${v.price || 0}" placeholder="價格">
+            <button class="btn-icon btn-danger btn-sm" onclick="removeVariant(${catIdx}, ${itemIdx}, ${vIdx})">✕</button>
+          </div>
+        `).join('');
+      }
+
       return `
         <div class="result-item" data-cat-idx="${catIdx}" data-item-idx="${itemIdx}">
-          <input type="text" class="item-name" value="${item.name || ''}" placeholder="品名">
-          <input type="number" class="item-price" value="${item.price || 0}" placeholder="價格">
-          <input type="text" class="item-desc" value="${item.description || ''}" placeholder="說明">
-          <button class="btn-icon btn-danger" onclick="removeItem(${catIdx}, ${itemIdx})">🗑️</button>
+          <div class="item-main-row">
+            <input type="text" class="item-name" value="${item.name || ''}" placeholder="品名">
+            <input type="number" class="item-price" value="${item.price || 0}" placeholder="預設價格">
+            <input type="text" class="item-desc" value="${item.description || ''}" placeholder="說明">
+            <button class="btn-icon btn-danger" onclick="removeItem(${catIdx}, ${itemIdx})">🗑️</button>
+          </div>
+          <div class="item-variants">
+            ${variantsHtml}
+            <button class="btn-link btn-add-variant" onclick="addVariant(${catIdx}, ${itemIdx})">+ 新增尺寸</button>
+          </div>
         </div>
       `;
     }
@@ -1023,9 +1251,31 @@
       showRecognitionResult(recognizedMenu, []);
     }
 
+    function addVariant(catIdx, itemIdx) {
+      const item = recognizedMenu.categories[catIdx].items[itemIdx];
+      if (!item.variants) item.variants = [];
+      item.variants.push({ name: '', price: 0 });
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function removeVariant(catIdx, itemIdx, varIdx) {
+      const item = recognizedMenu.categories[catIdx].items[itemIdx];
+      if (item.variants) {
+        item.variants.splice(varIdx, 1);
+        if (item.variants.length === 0) delete item.variants;
+      }
+      showRecognitionResult(recognizedMenu, []);
+    }
+
     function backToUpload() {
-      document.getElementById('result-step').style.display = 'none';
-      document.getElementById('upload-step').style.display = 'block';
+      if (isEditMode) {
+        // 編輯模式：直接關閉對話框
+        closeMenuUpload();
+      } else {
+        // 辨識模式：返回上傳步驟
+        document.getElementById('result-step').style.display = 'none';
+        document.getElementById('upload-step').style.display = 'block';
+      }
     }
 
     // 儲存辨識結果
@@ -1041,14 +1291,28 @@
           const price = parseInt(itemEl.querySelector('.item-price').value) || 0;
           const desc = itemEl.querySelector('.item-desc').value.trim();
 
+          // 收集尺寸變體
+          const variants = [];
+          itemEl.querySelectorAll('.variant-row').forEach(varEl => {
+            const varName = varEl.querySelector('.variant-name').value.trim();
+            const varPrice = parseInt(varEl.querySelector('.variant-price').value) || 0;
+            if (varName) {
+              variants.push({ name: varName, price: varPrice });
+            }
+          });
+
           if (name) {
-            items.push({
+            const item = {
               id: `item-${catIdx}-${itemIdx}`,
               name: name,
               price: price,
               description: desc,
               available: true
-            });
+            };
+            if (variants.length > 0) {
+              item.variants = variants;
+            }
+            items.push(item);
           }
         });
 

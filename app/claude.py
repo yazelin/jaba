@@ -1,13 +1,96 @@
-"""Claude CLI 整合模組"""
+"""AI CLI 整合模組 - 支援 Claude 與 Gemini CLI"""
 import subprocess
 import json
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 from . import data
+from .data import SessionInfo
+
+
+# === Provider 命令建構 ===
+
+def _build_claude_command(
+    model: str,
+    prompt: str,
+    system_prompt: str,
+    session_info: SessionInfo | None
+) -> tuple[list[str], str | None]:
+    """建構 Claude CLI 命令
+
+    Returns:
+        tuple: (命令列表, 新 session_id 或 None)
+    """
+    cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt]
+    new_session_id = None
+
+    if session_info and session_info.session_id:
+        # 後續對話：恢復 session
+        cmd.extend(["--resume", session_info.session_id])
+    else:
+        # 首次對話：生成 UUID 並建立 session
+        new_session_id = str(uuid.uuid4())
+        cmd.extend(["--session-id", new_session_id])
+
+    cmd.append(prompt)
+    return cmd, new_session_id
+
+
+def _build_gemini_command(
+    model: str,
+    prompt: str,
+    system_prompt: str,
+    session_info: SessionInfo | None
+) -> tuple[list[str], int | None]:
+    """建構 Gemini CLI 命令
+
+    Gemini CLI 差異：
+    - 無 --system-prompt，需併入 prompt 開頭
+    - 使用 -m 指定模型
+    - 使用 -o json 指定輸出格式
+    - Session 使用索引而非 UUID
+
+    Returns:
+        tuple: (命令列表, None - Gemini 需事後追蹤 session)
+    """
+    # 將 system prompt 併入 prompt 開頭
+    full_prompt = f"{system_prompt}\n\n{prompt}"
+
+    cmd = ["gemini", "-m", model, "-o", "json"]
+
+    if session_info and session_info.session_index is not None:
+        # 後續對話：恢復 session
+        cmd.extend(["--resume", str(session_info.session_index)])
+    # 首次對話：不加 --resume，讓 Gemini 自動建立
+
+    cmd.append(full_prompt)
+    return cmd, None
+
+
+def _build_claude_menu_command(model: str, prompt: str, image_path: str) -> list[str]:
+    """建構 Claude CLI 菜單辨識命令"""
+    full_prompt = f"請先使用 Read 工具讀取圖片 {image_path}，然後{prompt}"
+    return [
+        "claude", "-p", full_prompt,
+        "--model", model,
+        "--tools", "Read",
+        "--allowedTools", "Read",
+        "--dangerously-skip-permissions"
+    ]
+
+
+def _build_gemini_menu_command(model: str, prompt: str, image_path: str) -> list[str]:
+    """建構 Gemini CLI 菜單辨識命令"""
+    full_prompt = f"請先使用 Read 工具讀取圖片 {image_path}，然後{prompt}"
+    return [
+        "gemini", "-m", model, "-o", "json",
+        "--allowed-tools", "Read",
+        "-y",  # YOLO mode - 自動確認
+        full_prompt
+    ]
 
 
 def get_system_prompt(is_manager: bool = False) -> str:
@@ -105,12 +188,25 @@ def call_claude(
     message: str,
     is_manager: bool = False
 ) -> dict:
-    """呼叫 Claude CLI"""
+    """呼叫 AI CLI（支援 Claude 與 Gemini）"""
     # 確保使用者存在
     data.ensure_user(username)
 
-    # 取得或建立 session（管理員和一般模式分開）
-    session_id = data.get_session_id(username, is_manager)
+    # 取得 AI 設定
+    ai_config = data.get_ai_config()
+    chat_config = ai_config.get("chat", {})
+    provider = chat_config.get("provider", "claude")
+    model = chat_config.get("model", "haiku")
+
+    # 取得或建立 session
+    session_info = data.get_session_info(username, is_manager)
+
+    # 檢查 session 是否與當前 provider 匹配
+    if session_info and session_info.provider != provider:
+        # Provider 改變，清除舊 session
+        data.clear_session_info(username, is_manager)
+        session_info = None
+
     system_prompt = get_system_prompt(is_manager)
     context = build_context(username, is_manager)
 
@@ -128,23 +224,21 @@ def call_claude(
 如果不需要執行動作，actions 可以是空陣列 []。
 如果需要執行多個步驟，在 actions 陣列中一次回傳所有動作。"""
 
-    # 取得模型設定
-    ai_config = data.get_ai_config()
-    model = ai_config.get("chat", {}).get("model", "haiku")
-
-    # 建立命令（Claude CLI 支援直接使用 sonnet/opus/haiku 等簡稱）
-    cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt]
-
-    if session_id:
-        # 後續對話：恢復 session（會自動帶入之前的對話歷史）
-        cmd.extend(["--resume", session_id])
+    # 根據 provider 建構命令
+    if provider == "gemini":
+        cmd, _ = _build_gemini_command(model, full_message, system_prompt, session_info)
     else:
-        # 首次對話：生成 UUID 並建立 session
-        new_session_id = str(uuid.uuid4())
-        data.save_session_id(username, new_session_id, is_manager)
-        cmd.extend(["--session-id", new_session_id])
-
-    cmd.append(full_message)
+        # 預設使用 Claude
+        cmd, new_session_id = _build_claude_command(model, full_message, system_prompt, session_info)
+        if new_session_id:
+            # 儲存新的 session
+            new_session_info = SessionInfo(
+                provider="claude",
+                session_id=new_session_id,
+                is_manager=is_manager,
+                created_at=datetime.now().isoformat()
+            )
+            data.save_session_info(username, new_session_info)
 
     try:
         result = subprocess.run(
@@ -156,6 +250,11 @@ def call_claude(
         )
 
         response_text = result.stdout.strip()
+
+        # Gemini 首次對話後追蹤 session（TODO: Phase 2 實作）
+        # if provider == "gemini" and not session_info:
+        #     session_index = _get_gemini_latest_session_index()
+        #     ...
 
         # 嘗試解析 JSON 回應
         try:
@@ -1071,7 +1170,7 @@ def _remove_item(username: str, action_data: dict) -> dict:
 
 
 def recognize_menu_image(image_base64: str) -> dict:
-    """使用 Claude Vision 辨識菜單圖片"""
+    """使用 AI Vision 辨識菜單圖片（支援 Claude 與 Gemini）"""
     import base64
     import os
     import time
@@ -1086,7 +1185,7 @@ def recognize_menu_image(image_base64: str) -> dict:
     except Exception as e:
         return {"error": f"圖片解碼失敗：{str(e)}"}
 
-    # 建立暫存檔（放在專案目錄內確保 Claude CLI 可存取）
+    # 建立暫存檔（放在專案目錄內確保 CLI 可存取）
     temp_dir = data.DATA_DIR / "temp"
     temp_dir.mkdir(exist_ok=True)
     temp_path = str(temp_dir / f"menu_temp_{int(time.time())}.jpg")
@@ -1099,20 +1198,18 @@ def recognize_menu_image(image_base64: str) -> dict:
         prompt_data = data.get_jaba_prompt()
         prompt = prompt_data.get("menu_recognition_prompt", "請分析這張菜單圖片，提取所有菜單項目並回傳 JSON 格式。")
 
-        # 取得模型設定
+        # 取得 AI 設定
         ai_config = data.get_ai_config()
-        model = ai_config.get("menu_recognition", {}).get("model", "sonnet")
+        menu_config = ai_config.get("menu_recognition", {})
+        provider = menu_config.get("provider", "claude")
+        model = menu_config.get("model", "sonnet")
 
-        # 使用 Claude CLI 分析圖片
-        # Claude CLI 支援直接使用 sonnet/opus/haiku 等簡稱
-        full_prompt = f"請先使用 Read 工具讀取圖片 {temp_path}，然後{prompt}"
-        cmd = [
-            "claude", "-p", full_prompt,
-            "--model", model,
-            "--tools", "Read",
-            "--allowedTools", "Read",
-            "--dangerously-skip-permissions"
-        ]
+        # 根據 provider 建構命令
+        if provider == "gemini":
+            cmd = _build_gemini_menu_command(model, prompt, temp_path)
+        else:
+            # 預設使用 Claude
+            cmd = _build_claude_menu_command(model, prompt, temp_path)
 
         result = subprocess.run(
             cmd,
@@ -1128,10 +1225,10 @@ def recognize_menu_image(image_base64: str) -> dict:
         # 檢查是否有錯誤
         if result.returncode != 0:
             error_msg = error_text or response_text or "未知錯誤"
-            return {"error": f"Claude CLI 執行失敗：{error_msg}"}
+            return {"error": f"{provider.upper()} CLI 執行失敗：{error_msg}"}
 
         if not response_text:
-            return {"error": f"Claude 沒有回應。stderr: {error_text or '(無)'}"}
+            return {"error": f"AI 沒有回應。stderr: {error_text or '(無)'}"}
 
         # 嘗試解析 JSON 回應
         json_match = re.search(r'\{[\s\S]*\}', response_text)

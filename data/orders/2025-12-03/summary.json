@@ -38,6 +38,24 @@
         }
       ],
       "total": 110
+    },
+    {
+      "order_id": "2025-12-03-2305021715",
+      "username": "亞澤",
+      "store_id": "coco",
+      "store_name": "CoCo都可茶飲",
+      "items": [
+        {
+          "id": "item-2-0",
+          "name": "奶茶三兄弟",
+          "price": 65,
+          "quantity": 1,
+          "size": "L",
+          "note": "無糖去冰",
+          "calories": 240
+        }
+      ],
+      "total": 65
     }
   ],
   "item_summary": [
@@ -48,8 +66,12 @@
     {
       "name": "泰式榴槤莎莎",
       "quantity": 1
+    },
+    {
+      "name": "奶茶三兄弟",
+      "quantity": 1
     }
   ],
-  "grand_total": 130,
-  "updated_at": "2025-12-03T21:16:13.302662"
+  "grand_total": 195,
+  "updated_at": "2025-12-03T23:05:02.171696"
 }

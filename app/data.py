@@ -2,7 +2,18 @@
 import json
 from pathlib import Path
 from datetime import date, datetime
+from dataclasses import dataclass, asdict
 from typing import Any
+
+
+@dataclass
+class SessionInfo:
+    """Session 資訊，支援多種 CLI provider"""
+    provider: str  # "claude" 或 "gemini"
+    session_id: str | None = None  # Claude 用：UUID
+    session_index: int | None = None  # Gemini 用：索引編號
+    is_manager: bool = False
+    created_at: str | None = None
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
@@ -138,8 +149,8 @@ def get_jaba_prompt() -> dict:
 def get_ai_config() -> dict:
     """取得 AI 設定"""
     default_config = {
-        "chat": {"model": "haiku"},
-        "menu_recognition": {"model": "sonnet"}
+        "chat": {"provider": "claude", "model": "haiku"},
+        "menu_recognition": {"provider": "claude", "model": "sonnet"}
     }
     config = read_json(DATA_DIR / "system" / "ai_config.json")
     if config:
@@ -147,6 +158,10 @@ def get_ai_config() -> dict:
         for key in default_config:
             if key not in config:
                 config[key] = default_config[key]
+            else:
+                # 確保每個功能都有 provider 欄位
+                if "provider" not in config[key]:
+                    config[key]["provider"] = default_config[key]["provider"]
         return config
     return default_config
 
@@ -255,33 +270,99 @@ def update_user_profile(username: str, updates: dict) -> dict:
 
 
 def get_session_id(username: str, is_manager: bool = False) -> str | None:
-    """取得使用者今日的 session ID（管理員和一般模式分開）"""
-    today = date.today().isoformat()
-    suffix = "-manager" if is_manager else ""
-    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
-    if session_file.exists():
-        return session_file.read_text().strip()
+    """取得使用者今日的 session ID（向後相容，僅回傳 Claude session_id）"""
+    session_info = get_session_info(username, is_manager)
+    if session_info and session_info.provider == "claude":
+        return session_info.session_id
     return None
 
 
 def save_session_id(username: str, session_id: str, is_manager: bool = False) -> None:
-    """儲存使用者今日的 session ID（管理員和一般模式分開）"""
-    today = date.today().isoformat()
-    suffix = "-manager" if is_manager else ""
-    session_dir = DATA_DIR / "users" / username / "sessions"
-    session_dir.mkdir(parents=True, exist_ok=True)
-    (session_dir / f"{today}{suffix}.txt").write_text(session_id)
+    """儲存使用者今日的 session ID（向後相容，使用 Claude provider）"""
+    session_info = SessionInfo(
+        provider="claude",
+        session_id=session_id,
+        is_manager=is_manager,
+        created_at=datetime.now().isoformat()
+    )
+    save_session_info(username, session_info)
 
 
 def clear_session_id(username: str, is_manager: bool = False) -> bool:
-    """清除使用者今日的 session ID（用於重新開始對話）"""
+    """清除使用者今日的 session ID（向後相容）"""
+    return clear_session_info(username, is_manager)
+
+
+def get_session_info(username: str, is_manager: bool = False) -> SessionInfo | None:
+    """取得使用者今日的 session 資訊"""
     today = date.today().isoformat()
     suffix = "-manager" if is_manager else ""
-    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
+    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.json"
+
+    # 嘗試讀取新格式 (JSON)
+    if session_file.exists():
+        data = read_json(session_file)
+        if data:
+            return SessionInfo(
+                provider=data.get("provider", "claude"),
+                session_id=data.get("session_id"),
+                session_index=data.get("session_index"),
+                is_manager=data.get("is_manager", is_manager),
+                created_at=data.get("created_at")
+            )
+
+    # 向後相容：嘗試讀取舊格式 (.txt)
+    old_session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
+    if old_session_file.exists():
+        session_id = old_session_file.read_text().strip()
+        if session_id:
+            return SessionInfo(
+                provider="claude",
+                session_id=session_id,
+                is_manager=is_manager
+            )
+
+    return None
+
+
+def save_session_info(username: str, session_info: SessionInfo) -> None:
+    """儲存使用者今日的 session 資訊"""
+    today = date.today().isoformat()
+    suffix = "-manager" if session_info.is_manager else ""
+    session_dir = DATA_DIR / "users" / username / "sessions"
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    # 使用新格式 (JSON)
+    session_file = session_dir / f"{today}{suffix}.json"
+    write_json(session_file, asdict(session_info))
+
+    # 清除舊格式檔案（如果存在）
+    old_session_file = session_dir / f"{today}{suffix}.txt"
+    if old_session_file.exists():
+        old_session_file.unlink()
+
+
+def clear_session_info(username: str, is_manager: bool = False) -> bool:
+    """清除使用者今日的 session 資訊（用於重新開始對話）"""
+    today = date.today().isoformat()
+    suffix = "-manager" if is_manager else ""
+    session_dir = DATA_DIR / "users" / username / "sessions"
+
+    cleared = False
+
+    # 清除新格式
+    session_file = session_dir / f"{today}{suffix}.json"
     if session_file.exists():
         session_file.unlink()
-        return True
-    return False
+        cleared = True
+
+    # 清除舊格式
+    old_session_file = session_dir / f"{today}{suffix}.txt"
+    if old_session_file.exists():
+        old_session_file.unlink()
+        cleared = True
+
+    return cleared
 
 
 # === 訂單管理 ===

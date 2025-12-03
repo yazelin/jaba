@@ -1,8 +1,10 @@
 {
   "chat": {
+    "provider": "claude",
     "model": "haiku"
   },
   "menu_recognition": {
+    "provider": "claude",
     "model": "opus"
   }
 }

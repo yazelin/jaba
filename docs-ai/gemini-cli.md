@@ -16,13 +16,33 @@ gemini [options] [query...]
 
 ## 主要選項
 
-### 會話控制
+### 會話（Session）管理
 
 | 選項 | 說明 |
 |------|------|
-| `-r, --resume <index\|latest>` | 恢復之前的會話，使用 `latest` 恢復最近一次，或指定索引編號 |
+| `-r, --resume <index\|latest>` | 接續之前的會話，使用 `latest` 接續最近一次，或指定索引編號 |
 | `--list-sessions` | 列出當前專案可用的會話並結束 |
 | `--delete-session <index>` | 刪除指定索引的會話 |
+
+#### Session 操作範例
+
+```bash
+# 開新 session（直接執行，不加 --resume）
+gemini
+
+# 查看所有 session
+gemini --list-sessions
+
+# 接續最近的 session
+gemini --resume latest
+gemini -r latest
+
+# 接續特定編號的 session（編號從 --list-sessions 查看）
+gemini -r 5
+
+# 刪除 session
+gemini --delete-session 5
+```
 
 ### 輸出模式
 
@@ -34,7 +54,25 @@ gemini [options] [query...]
 
 | 選項 | 說明 |
 |------|------|
-| `-m, --model <model>` | 指定模型 |
+| `-m, --model <model>` | 指定模型（使用 Model ID） |
+
+#### 可用模型
+
+| 選項 | Model ID | 說明 |
+|------|----------|------|
+| Auto | (系統自動選擇) | 讓系統選擇最佳模型 |
+| Pro | `gemini-2.5-pro` | 複雜任務，深度推理和創意 |
+| Flash | `gemini-2.5-flash` | 平衡速度與推理 |
+| Flash-Lite | `gemini-2.5-flash-lite` | 簡單任務，快速完成 |
+
+> **Gemini 3 預覽版**：可在互動模式中進入 `/settings` 啟用 "Preview features" 來使用。
+
+```bash
+# 指定模型範例
+gemini -m gemini-2.5-pro
+gemini -m gemini-2.5-flash
+gemini -m gemini-2.5-flash-lite
+```
 
 ### 提示模式
 

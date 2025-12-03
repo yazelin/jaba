@@ -1,6 +1,6 @@
 {
   "store_id": "coco",
-  "updated_at": "2025-12-03T11:33:01.371537",
+  "updated_at": "2025-12-03T23:06:36.098680",
   "categories": [
     {
       "name": "無咖啡因",
@@ -9,57 +9,121 @@
           "id": "item-0-0",
           "name": "日安六條大麥",
           "price": 35,
-          "description": "Barley Tea，現折價 M杯35/L杯40",
-          "available": true
+          "description": "Barley Tea，限量優惠",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 35
+            },
+            {
+              "name": "L",
+              "price": 40
+            }
+          ]
         },
         {
           "id": "item-0-1",
           "name": "蕎麥冬瓜露",
           "price": 45,
-          "description": "Winter Melon Juice with Buckwheat，M杯45/L杯50",
-          "available": true
+          "description": "Winter Melon Juice with Buckwheat",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 45
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         },
         {
           "id": "item-0-2",
           "name": "金桔檸檬",
           "price": 55,
-          "description": "Lemonade Kumquat，M杯55/L杯65",
-          "available": true
+          "description": "Lemonade Kumquat",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         },
         {
           "id": "item-0-3",
           "name": "粉角檸檬冬瓜",
           "price": 50,
-          "description": "Winter Melon Lemon with Gem Boba，M杯50/L杯60",
-          "available": true
+          "description": "Winter Melon Lemon with Gem Boba",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 50
+            },
+            {
+              "name": "L",
+              "price": 60
+            }
+          ]
         },
         {
           "id": "item-0-4",
           "name": "檸檬奇遇桔",
           "price": 55,
           "description": "Lemon Chia Seeds Meet Kumquat/Plum",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            }
+          ]
         },
         {
           "id": "item-0-5",
           "name": "手作仙草凍乳",
           "price": 70,
           "description": "Grass Jelly Milk",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 70
+            }
+          ]
         },
         {
           "id": "item-0-6",
           "name": "芋頭牛奶",
           "price": 65,
           "description": "Fresh Milk with Taro",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 65
+            }
+          ]
         },
         {
           "id": "item-0-7",
           "name": "芋頭QQ牛奶",
           "price": 70,
           "description": "Fresh Milk with Taro, Sweet Potato Ball & Taro Ball",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 70
+            }
+          ]
         }
       ]
     },
@@ -70,43 +134,103 @@
           "id": "item-1-0",
           "name": "茉莉綠茶",
           "price": 30,
-          "description": "M杯30/L杯35",
-          "available": true
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 30
+            },
+            {
+              "name": "L",
+              "price": 35
+            }
+          ]
         },
         {
           "id": "item-1-1",
           "name": "四季春青茶",
           "price": 30,
-          "description": "Spring Oolong Tea，M杯30/L杯35",
-          "available": true
+          "description": "Spring Oolong Tea",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 30
+            },
+            {
+              "name": "L",
+              "price": 35
+            }
+          ]
         },
         {
           "id": "item-1-2",
-          "name": "翡翠烏龍茶",
-          "price": 30,
-          "description": "Green Oolong Tea，M杯30/L杯35",
-          "available": true
+          "name": "粉角檸檬青",
+          "price": 45,
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 45
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         },
         {
           "id": "item-1-3",
           "name": "手採紅茶",
           "price": 30,
-          "description": "Black Tea，M杯30/L杯35",
-          "available": true
+          "description": "Black Tea",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 30
+            },
+            {
+              "name": "L",
+              "price": 35
+            }
+          ]
         },
         {
           "id": "item-1-4",
           "name": "日式焙茶",
           "price": 35,
-          "description": "Hojicha，M杯35/L杯40",
-          "available": true
+          "description": "Hojicha",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 35
+            },
+            {
+              "name": "L",
+              "price": 40
+            }
+          ]
         },
         {
           "id": "item-1-5",
           "name": "四季珍椰青",
           "price": 45,
-          "description": "Spring Oolong Tea with Pearl and Coconut Jelly，M杯45/L杯50",
-          "available": true
+          "description": "Spring Oolong Tea with Pearl and Coconut Jelly",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 45
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         }
       ]
     },
@@ -118,56 +242,128 @@
           "name": "奶茶三兄弟",
           "price": 65,
           "description": "3 Gems Milk Tea with Pudding, Pearl and Grass Jelly",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         },
         {
           "id": "item-2-1",
           "name": "阿薩姆奶茶",
           "price": 40,
-          "description": "Assam Milk Tea，M杯40/L杯50",
-          "available": true
+          "description": "Assam Milk Tea",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 40
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         },
         {
           "id": "item-2-2",
           "name": "珍珠奶茶",
           "price": 50,
-          "description": "M杯50/L杯60",
-          "available": true
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 50
+            },
+            {
+              "name": "L",
+              "price": 60
+            }
+          ]
         },
         {
           "id": "item-2-3",
           "name": "粉角奶茶",
           "price": 50,
           "description": "Milk Tea with Gem Boba",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 50
+            },
+            {
+              "name": "L",
+              "price": 60
+            }
+          ]
         },
         {
           "id": "item-2-4",
           "name": "QQ奶茶",
           "price": 50,
-          "description": "QQ Milk Tea (Sweet potato ball & Taro ball)，M杯50/L杯60",
-          "available": true
+          "description": "QQ Milk Tea (Sweet potato ball & Taro ball)",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 50
+            },
+            {
+              "name": "L",
+              "price": 60
+            }
+          ]
         },
         {
           "id": "item-2-5",
           "name": "3Q奶茶",
           "price": 55,
-          "description": "3Q Milk Tea (Pearl & Sweet potato ball & Taro ball)，M杯55/L杯65",
-          "available": true
+          "description": "3Q Milk Tea (Pearl & Sweet potato ball & Taro ball)",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         },
         {
           "id": "item-2-6",
-          "name": "冬顏撞焙珍奶",
+          "name": "冬顆撞焙珍奶",
           "price": 70,
           "description": "Leicha & Hojicha Milk Tea with Pearl",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "L",
+              "price": 70
+            }
+          ]
         },
         {
           "id": "item-2-7",
           "name": "日焙珍珠奶茶",
           "price": 55,
-          "description": "Hojicha Milk Tea with Pearl，M杯55/L杯65",
-          "available": true
+          "description": "Hojicha Milk Tea with Pearl",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         }
       ]
     },
@@ -178,50 +374,112 @@
           "id": "item-3-0",
           "name": "英式鮮奶茶",
           "price": 55,
-          "description": "Black Tea Latte，M杯55/L杯70",
-          "available": true
+          "description": "Black Tea Latte",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 70
+            }
+          ]
         },
         {
           "id": "item-3-1",
           "name": "日焙鮮奶茶",
           "price": 65,
-          "description": "Hojicha Tea Latte，M杯65/L杯75",
-          "available": true
+          "description": "Hojicha Tea Latte",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 65
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-3-2",
           "name": "珍珠鮮奶茶",
           "price": 65,
-          "description": "M杯65/L杯75",
-          "available": true
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 65
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-3-3",
           "name": "QQ鮮奶茶",
           "price": 65,
-          "description": "QQ Fresh Milk Tea (Sweet potato ball & Taro ball)，M杯65/L杯75",
-          "available": true
+          "description": "QQ Black Tea Latte (Sweet potato ball & Taro ball)",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 65
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-3-4",
           "name": "3Q鮮奶茶",
           "price": 65,
-          "description": "3Q Black Tea Latte (Pearl & Sweet potato ball & Taro ball)，M杯65/L杯75",
-          "available": true
+          "description": "3Q Black Tea Latte (Pearl & Sweet potato ball & Taro ball)",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 65
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-3-5",
           "name": "28茶輕乳茶",
           "price": 60,
-          "description": "Jasmine milk tea，現折價",
-          "available": true
+          "description": "Jasmine milk tea，限量優惠",
+          "available": true,
+          "variants": [
+            {
+              "name": "L",
+              "price": 60
+            }
+          ]
         },
         {
           "id": "item-3-6",
           "name": "28茶粉角輕乳茶",
           "price": 70,
-          "description": "Jasmine milk tea with Gem Boba，現折價",
-          "available": true
+          "description": "Jasmine milk tea with Gem Boba，限量優惠",
+          "available": true,
+          "variants": [
+            {
+              "name": "L",
+              "price": 70
+            }
+          ]
         }
       ]
     },
@@ -232,123 +490,146 @@
           "id": "item-4-0",
           "name": "百香雙響炮",
           "price": 70,
-          "description": "Tropical Special (Passion Fruit Tea with Lemon)",
-          "available": true
+          "description": "Tropical Special (Passion Fruit with Mango & Orange)",
+          "available": true,
+          "variants": [
+            {
+              "name": "L",
+              "price": 70
+            }
+          ]
         },
         {
           "id": "item-4-1",
           "name": "葡萄柚果茶",
           "price": 70,
           "description": "Grapefruit Green Tea",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 70
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-4-2",
           "name": "莓好雙果茶",
           "price": 70,
-          "description": "Black Tea With Strawberry & Cranberry，M杯70/L杯75",
-          "available": true
+          "description": "Black Tea With Strawberry & Cranberry",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 70
+            },
+            {
+              "name": "L",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-4-3",
           "name": "莓好雙果牛乳",
           "price": 75,
           "description": "Strawberry & Cranberry Milk",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 75
+            }
+          ]
         },
         {
           "id": "item-4-4",
           "name": "檸檬紅茶綠/青",
           "price": 45,
-          "description": "Lemon Black/Green/Spring Oolong Tea，M杯45/L杯55",
-          "available": true
+          "description": "Lemon Black/Green/Spring Oolong Tea",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 45
+            },
+            {
+              "name": "L",
+              "price": 55
+            }
+          ]
         },
         {
           "id": "item-4-5",
           "name": "百香綠茶",
           "price": 40,
-          "description": "M杯40/L杯50",
-          "available": true
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 40
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         },
         {
           "id": "item-4-6",
           "name": "芒果綠茶",
           "price": 40,
-          "description": "Mango Green Tea，M杯40/L杯50",
-          "available": true
+          "description": "Mango Green Tea",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 40
+            },
+            {
+              "name": "L",
+              "price": 50
+            }
+          ]
         },
         {
           "id": "item-4-7",
           "name": "蜜香檸凍紅/綠/青",
           "price": 55,
-          "description": "Lemon Black/Green/Spring Oolong Tea with Honey Jelly，M杯55/L杯65",
-          "available": true
+          "description": "Lemon Black/Green/Spring Oolong Tea with Honey Jelly",
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         },
         {
           "id": "item-4-8",
           "name": "綠茶養樂多",
-          "price": 70,
+          "price": 55,
           "description": "Green Tea Yakult",
-          "available": true
-        }
-      ]
-    },
-    {
-      "name": "加料",
-      "items": [
-        {
-          "id": "item-5-0",
-          "name": "珍珠",
-          "price": 10,
-          "description": "Bubble",
-          "available": true
-        },
-        {
-          "id": "item-5-1",
-          "name": "QQ",
-          "price": 10,
-          "description": "QQ(Sweet potato ball & Taro ball)",
-          "available": true
-        },
-        {
-          "id": "item-5-2",
-          "name": "粉角",
-          "price": 10,
-          "description": "Gem Boba",
-          "available": true
-        },
-        {
-          "id": "item-5-3",
-          "name": "布丁",
-          "price": 10,
-          "description": "Pudding",
-          "available": true
-        },
-        {
-          "id": "item-5-4",
-          "name": "仙草",
-          "price": 10,
-          "description": "Grass Jelly",
-          "available": true
-        },
-        {
-          "id": "item-5-5",
-          "name": "蜜香凍",
-          "price": 10,
-          "description": "Honey Jelly",
-          "available": true
-        }
-      ]
-    },
-    {
-      "name": "新分類",
-      "items": [
-        {
-          "id": "item-6-0",
-          "name": "我只是測試看看",
-          "price": 0,
-          "description": "不重要的說明",
-          "available": true
+          "available": true,
+          "variants": [
+            {
+              "name": "M",
+              "price": 55
+            },
+            {
+              "name": "L",
+              "price": 65
+            }
+          ]
         }
       ]
     }

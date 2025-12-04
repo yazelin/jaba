@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 
 from app import data
-from app import claude
+from app import ai
 
 # 建立 Socket.IO 伺服器
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -141,7 +141,7 @@ async def mark_refund(request: Request):
     if not username:
         return JSONResponse({"error": "缺少 username"}, status_code=400)
 
-    result = claude._mark_refunded({"username": username})
+    result = ai._mark_refunded({"username": username})
 
     if result.get("success"):
         await broadcast_event("payment_updated", {"username": username})
@@ -158,7 +158,7 @@ async def mark_paid(request: Request):
     if not username:
         return JSONResponse({"error": "缺少 username"}, status_code=400)
 
-    result = claude._mark_paid({"username": username})
+    result = ai._mark_paid({"username": username})
 
     if result.get("success"):
         await broadcast_event("payment_updated", {"username": username})
@@ -179,15 +179,15 @@ async def chat(request: Request):
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
 
-    # 呼叫 Claude
-    response = claude.call_claude(username, message, is_manager)
+    # 呼叫 AI
+    response = ai.call_ai(username, message, is_manager)
 
     # 執行動作
     actions = response.get("actions", [])
     action_results = []
 
     if actions:
-        action_results = claude.execute_actions(username, actions, is_manager)
+        action_results = ai.execute_actions(username, actions, is_manager)
 
         # 廣播每個動作的事件
         for result in action_results:
@@ -312,7 +312,7 @@ async def recognize_menu(request: Request):
         return JSONResponse({"error": "請選擇店家或輸入新店家名稱"}, status_code=400)
 
     # 呼叫 AI 辨識
-    result = claude.recognize_menu_image(image_base64)
+    result = ai.recognize_menu_image(image_base64)
 
     if result.get("error"):
         return JSONResponse({"error": result["error"]}, status_code=500)

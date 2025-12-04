@@ -10,7 +10,7 @@
 | 查詢 sessions | 無 | `--list-sessions` |
 | 刪除 session | 無 | `--delete-session <index>` |
 | 指定模型 | `--model <name>` | `-m <name>` |
-| 輸出格式 | `--output-format json` | `-o json` |
+| 輸出格式 | `--output-format json` | 不使用（由 prompt 指定 JSON 格式） |
 | 系統提示 | `--system-prompt <text>` | 無，需併入 prompt |
 | 跳過確認 | `--dangerously-skip-permissions` | `-y` 或 `--yolo` |
 | 指定工具 | `--tools <t>` | `--allowed-tools <t>` |
@@ -114,9 +114,21 @@ def _build_claude_command(model, prompt, system_prompt, session_info) -> list[st
 def _build_gemini_command(model, prompt, system_prompt, session_info) -> list[str]:
     # 將 system prompt 併入 prompt 開頭
     full_prompt = f"{system_prompt}\n\n{prompt}"
-    cmd = ["gemini", "-m", model, "-o", "json"]
+    # 不使用 -o json，讓 AI 直接回應 prompt 要求的 JSON 格式
+    cmd = ["gemini", "-m", model]
     if session_info and session_info.session_index is not None:
         cmd.extend(["--resume", str(session_info.session_index)])
     cmd.append(full_prompt)
     return cmd, None  # Gemini 需要事後取得 session index
 ```
+
+## 實作筆記
+
+### Gemini CLI 特殊行為
+
+1. **`--list-sessions` 輸出到 stderr**：解析時需合併 stdout + stderr
+2. **Session 記憶有限**：`--resume` 主要用於工具/檔案狀態恢復，對話上下文記憶有限
+3. **輸出格式**：不使用 `-o json`，讓模型直接回應 prompt 要求的 JSON 格式更簡單
+4. **圖片辨識**：使用 `@檔名` 語法，需在圖片所在目錄執行命令
+   - 暫存圖片存放在 `temp/` 目錄（專案根目錄下，避免 gitignore 問題）
+   - 命令格式：`gemini -y "@圖片檔名 prompt內容"`

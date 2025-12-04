@@ -1,96 +1,15 @@
-"""AI CLI 整合模組 - 支援 Claude 與 Gemini CLI"""
+"""AI CLI 整合模組 - 支援多種 CLI Provider"""
 import subprocess
 import json
-import re
-import uuid
+import base64
+import os
+import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
 
 from . import data
 from .data import SessionInfo
-
-
-# === Provider 命令建構 ===
-
-def _build_claude_command(
-    model: str,
-    prompt: str,
-    system_prompt: str,
-    session_info: SessionInfo | None
-) -> tuple[list[str], str | None]:
-    """建構 Claude CLI 命令
-
-    Returns:
-        tuple: (命令列表, 新 session_id 或 None)
-    """
-    cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt]
-    new_session_id = None
-
-    if session_info and session_info.session_id:
-        # 後續對話：恢復 session
-        cmd.extend(["--resume", session_info.session_id])
-    else:
-        # 首次對話：生成 UUID 並建立 session
-        new_session_id = str(uuid.uuid4())
-        cmd.extend(["--session-id", new_session_id])
-
-    cmd.append(prompt)
-    return cmd, new_session_id
-
-
-def _build_gemini_command(
-    model: str,
-    prompt: str,
-    system_prompt: str,
-    session_info: SessionInfo | None
-) -> tuple[list[str], int | None]:
-    """建構 Gemini CLI 命令
-
-    Gemini CLI 差異：
-    - 無 --system-prompt，需併入 prompt 開頭
-    - 使用 -m 指定模型
-    - 使用 -o json 指定輸出格式
-    - Session 使用索引而非 UUID
-
-    Returns:
-        tuple: (命令列表, None - Gemini 需事後追蹤 session)
-    """
-    # 將 system prompt 併入 prompt 開頭
-    full_prompt = f"{system_prompt}\n\n{prompt}"
-
-    cmd = ["gemini", "-m", model, "-o", "json"]
-
-    if session_info and session_info.session_index is not None:
-        # 後續對話：恢復 session
-        cmd.extend(["--resume", str(session_info.session_index)])
-    # 首次對話：不加 --resume，讓 Gemini 自動建立
-
-    cmd.append(full_prompt)
-    return cmd, None
-
-
-def _build_claude_menu_command(model: str, prompt: str, image_path: str) -> list[str]:
-    """建構 Claude CLI 菜單辨識命令"""
-    full_prompt = f"請先使用 Read 工具讀取圖片 {image_path}，然後{prompt}"
-    return [
-        "claude", "-p", full_prompt,
-        "--model", model,
-        "--tools", "Read",
-        "--allowedTools", "Read",
-        "--dangerously-skip-permissions"
-    ]
-
-
-def _build_gemini_menu_command(model: str, prompt: str, image_path: str) -> list[str]:
-    """建構 Gemini CLI 菜單辨識命令"""
-    full_prompt = f"請先使用 Read 工具讀取圖片 {image_path}，然後{prompt}"
-    return [
-        "gemini", "-m", model, "-o", "json",
-        "--allowed-tools", "Read",
-        "-y",  # YOLO mode - 自動確認
-        full_prompt
-    ]
+from .providers import get_provider
 
 
 def get_system_prompt(is_manager: bool = False) -> str:
@@ -183,26 +102,29 @@ def _get_recent_store_history(days: int = 7) -> list:
     return history
 
 
-def call_claude(
+def call_ai(
     username: str,
     message: str,
     is_manager: bool = False
 ) -> dict:
-    """呼叫 AI CLI（支援 Claude 與 Gemini）"""
+    """呼叫 AI CLI（支援多種 Provider）"""
     # 確保使用者存在
     data.ensure_user(username)
 
     # 取得 AI 設定
     ai_config = data.get_ai_config()
     chat_config = ai_config.get("chat", {})
-    provider = chat_config.get("provider", "claude")
+    provider_name = chat_config.get("provider", "claude")
     model = chat_config.get("model", "haiku")
+
+    # 取得 provider
+    provider = get_provider(provider_name)
 
     # 取得或建立 session
     session_info = data.get_session_info(username, is_manager)
 
     # 檢查 session 是否與當前 provider 匹配
-    if session_info and session_info.provider != provider:
+    if session_info and session_info.provider != provider_name:
         # Provider 改變，清除舊 session
         data.clear_session_info(username, is_manager)
         session_info = None
@@ -224,55 +146,40 @@ def call_claude(
 如果不需要執行動作，actions 可以是空陣列 []。
 如果需要執行多個步驟，在 actions 陣列中一次回傳所有動作。"""
 
-    # 根據 provider 建構命令
-    if provider == "gemini":
-        cmd, _ = _build_gemini_command(model, full_message, system_prompt, session_info)
-    else:
-        # 預設使用 Claude
-        cmd, new_session_id = _build_claude_command(model, full_message, system_prompt, session_info)
-        if new_session_id:
-            # 儲存新的 session
-            new_session_info = SessionInfo(
-                provider="claude",
-                session_id=new_session_id,
-                is_manager=is_manager,
-                created_at=datetime.now().isoformat()
-            )
-            data.save_session_info(username, new_session_info)
+    # 使用 provider 建構命令
+    cmd_result = provider.build_chat_command(model, full_message, system_prompt, session_info)
+
+    # 如果是 Claude 的新 session，先儲存 session_id
+    if cmd_result.new_session_id:
+        new_session_info = SessionInfo(
+            provider=provider_name,
+            session_id=cmd_result.new_session_id,
+            is_manager=is_manager,
+            created_at=datetime.now().isoformat()
+        )
+        data.save_session_info(username, new_session_info)
 
     try:
         result = subprocess.run(
-            cmd,
+            cmd_result.cmd,
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(data.DATA_DIR.parent)
+            cwd=cmd_result.cwd
         )
 
-        response_text = result.stdout.strip()
+        # 如果是新 session，讓 provider 追蹤（如 Gemini）
+        if cmd_result.is_new_session and not cmd_result.new_session_id:
+            new_session_info = provider.get_session_info_after_call(
+                is_new_session=True,
+                return_code=result.returncode,
+                is_manager=is_manager
+            )
+            if new_session_info:
+                data.save_session_info(username, new_session_info)
 
-        # Gemini 首次對話後追蹤 session（TODO: Phase 2 實作）
-        # if provider == "gemini" and not session_info:
-        #     session_index = _get_gemini_latest_session_index()
-        #     ...
-
-        # 嘗試解析 JSON 回應
-        try:
-            # 尋找 JSON 內容
-            json_match = re.search(r'\{[\s\S]*\}', response_text)
-            if json_match:
-                response = json.loads(json_match.group())
-                return response
-            else:
-                return {
-                    "message": response_text,
-                    "actions": []
-                }
-        except json.JSONDecodeError:
-            return {
-                "message": response_text,
-                "actions": []
-            }
+        # 使用 provider 解析回應
+        return provider.parse_response(result.stdout, result.stderr, result.returncode)
 
     except subprocess.TimeoutExpired:
         return {
@@ -286,6 +193,88 @@ def call_claude(
             "actions": [],
             "error": str(e)
         }
+
+
+def recognize_menu_image(image_base64: str) -> dict:
+    """使用 AI Vision 辨識菜單圖片"""
+    # 移除 data URL 前綴（如果有）
+    if ',' in image_base64:
+        image_base64 = image_base64.split(',')[1]
+
+    try:
+        image_data = base64.b64decode(image_base64)
+    except Exception as e:
+        return {"error": f"圖片解碼失敗：{str(e)}"}
+
+    # 建立暫存檔
+    temp_dir = data.DATA_DIR.parent / "temp"
+    temp_dir.mkdir(exist_ok=True)
+    temp_path = str(temp_dir / f"menu_temp_{int(time.time())}.jpg")
+
+    with open(temp_path, 'wb') as f:
+        f.write(image_data)
+
+    try:
+        # 從檔案讀取 prompt
+        prompt_data = data.get_jaba_prompt()
+        prompt = prompt_data.get("menu_recognition_prompt", "請分析這張菜單圖片，提取所有菜單項目並回傳 JSON 格式。")
+
+        # 取得 AI 設定
+        ai_config = data.get_ai_config()
+        menu_config = ai_config.get("menu_recognition", {})
+        provider_name = menu_config.get("provider", "claude")
+        model = menu_config.get("model", "sonnet")
+
+        # 取得 provider
+        provider = get_provider(provider_name)
+
+        # 使用 provider 建構菜單辨識命令
+        cmd_result = provider.build_menu_command(model, prompt, temp_path)
+
+        result = subprocess.run(
+            cmd_result.cmd,
+            capture_output=True,
+            text=True,
+            timeout=180,  # 圖片辨識可能需要較長時間
+            cwd=cmd_result.cwd
+        )
+
+        response_text = result.stdout.strip()
+        error_text = result.stderr.strip()
+
+        # 檢查是否有錯誤
+        if result.returncode != 0:
+            error_msg = error_text or response_text or "未知錯誤"
+            return {"error": f"{provider_name.upper()} CLI 執行失敗：{error_msg}"}
+
+        if not response_text:
+            return {"error": f"AI 沒有回應。stderr: {error_text or '(無)'}"}
+
+        # 嘗試解析 JSON 回應
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            try:
+                menu_data = json.loads(json_match.group())
+                return {
+                    "menu": menu_data,
+                    "warnings": menu_data.get("warnings", [])
+                }
+            except json.JSONDecodeError as e:
+                return {"error": f"AI 回應格式錯誤：{str(e)}。回應內容：{response_text[:200]}..."}
+        else:
+            # 顯示 AI 實際回應以便診斷
+            preview = response_text[:300] if len(response_text) > 300 else response_text
+            return {"error": f"AI 回應不包含預期的 JSON 格式。回應內容：{preview}"}
+
+    except subprocess.TimeoutExpired:
+        return {"error": "辨識超時，請稍後再試"}
+    except Exception as e:
+        return {"error": f"辨識失敗：{str(e)}"}
+    finally:
+        # 清理暫存檔
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 
 def execute_actions(username: str, actions: list, is_manager: bool = False) -> list:
@@ -351,8 +340,6 @@ def execute_action(username: str, action: dict, is_manager: bool = False) -> dic
 
 def _create_order(username: str, action_data: dict) -> dict:
     """建立訂單"""
-    from datetime import datetime
-
     today_info = data.get_today_info()
     today_stores = today_info.get("stores", [])
 
@@ -694,8 +681,6 @@ def _remove_today_store(action_data: dict) -> dict:
 
 def _create_store(action_data: dict) -> dict:
     """新增店家"""
-    from datetime import datetime
-
     store_id = action_data.get("id")
     if not store_id:
         return {"success": False, "error": "缺少店家 ID"}
@@ -745,8 +730,6 @@ def _update_store(action_data: dict) -> dict:
 
 def _update_menu(action_data: dict) -> dict:
     """更新菜單"""
-    from datetime import datetime
-
     store_id = action_data.get("store_id")
     if not store_id:
         return {"success": False, "error": "缺少 store_id"}
@@ -767,8 +750,6 @@ def _update_menu(action_data: dict) -> dict:
 
 def _update_item_variants(action_data: dict) -> dict:
     """更新菜單品項的尺寸變體"""
-    from datetime import datetime
-
     store_id = action_data.get("store_id")
     item_id = action_data.get("item_id")
     item_name = action_data.get("item_name")
@@ -852,8 +833,6 @@ def _update_item_variants(action_data: dict) -> dict:
 
 def _mark_paid(action_data: dict) -> dict:
     """標記已付款"""
-    from datetime import datetime
-
     username = action_data.get("username")
     order_date = action_data.get("date", date.today().isoformat())
 
@@ -1010,7 +989,16 @@ def _clean_history_orders(action_data: dict) -> dict:
 
 def _reset_session(username: str, is_manager: bool) -> dict:
     """重置對話 session，讓下次對話重新開始"""
-    cleared = data.clear_session_id(username, is_manager)
+    # 先取得 session 資訊（用於 provider 刪除）
+    session_info = data.get_session_info(username, is_manager)
+
+    # 如果有 session，使用對應的 provider 刪除
+    if session_info:
+        provider = get_provider(session_info.provider)
+        provider.delete_session(session_info)
+
+    # 清除本地 session 資訊
+    cleared = data.clear_session_info(username, is_manager)
     mode = "管理員" if is_manager else "一般"
     if cleared:
         return {
@@ -1038,8 +1026,6 @@ def _update_user_profile(username: str, action_data: dict) -> dict:
 
 def _remove_item(username: str, action_data: dict) -> dict:
     """從現有訂單中移除品項"""
-    from datetime import datetime
-
     item_name = action_data.get("item_name", "")
     item_id = action_data.get("item_id")
     quantity_to_remove = action_data.get("quantity", 1)
@@ -1167,90 +1153,3 @@ def _remove_item(username: str, action_data: dict) -> dict:
         "order": target_order,
         "summary": summary
     }
-
-
-def recognize_menu_image(image_base64: str) -> dict:
-    """使用 AI Vision 辨識菜單圖片（支援 Claude 與 Gemini）"""
-    import base64
-    import os
-    import time
-
-    # 將 base64 圖片存為暫存檔
-    # 移除 data URL 前綴（如果有）
-    if ',' in image_base64:
-        image_base64 = image_base64.split(',')[1]
-
-    try:
-        image_data = base64.b64decode(image_base64)
-    except Exception as e:
-        return {"error": f"圖片解碼失敗：{str(e)}"}
-
-    # 建立暫存檔（放在專案目錄內確保 CLI 可存取）
-    temp_dir = data.DATA_DIR / "temp"
-    temp_dir.mkdir(exist_ok=True)
-    temp_path = str(temp_dir / f"menu_temp_{int(time.time())}.jpg")
-
-    with open(temp_path, 'wb') as f:
-        f.write(image_data)
-
-    try:
-        # 從檔案讀取 prompt
-        prompt_data = data.get_jaba_prompt()
-        prompt = prompt_data.get("menu_recognition_prompt", "請分析這張菜單圖片，提取所有菜單項目並回傳 JSON 格式。")
-
-        # 取得 AI 設定
-        ai_config = data.get_ai_config()
-        menu_config = ai_config.get("menu_recognition", {})
-        provider = menu_config.get("provider", "claude")
-        model = menu_config.get("model", "sonnet")
-
-        # 根據 provider 建構命令
-        if provider == "gemini":
-            cmd = _build_gemini_menu_command(model, prompt, temp_path)
-        else:
-            # 預設使用 Claude
-            cmd = _build_claude_menu_command(model, prompt, temp_path)
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=180,  # 圖片辨識可能需要較長時間
-            cwd=str(data.DATA_DIR.parent)
-        )
-
-        response_text = result.stdout.strip()
-        error_text = result.stderr.strip()
-
-        # 檢查是否有錯誤
-        if result.returncode != 0:
-            error_msg = error_text or response_text or "未知錯誤"
-            return {"error": f"{provider.upper()} CLI 執行失敗：{error_msg}"}
-
-        if not response_text:
-            return {"error": f"AI 沒有回應。stderr: {error_text or '(無)'}"}
-
-        # 嘗試解析 JSON 回應
-        json_match = re.search(r'\{[\s\S]*\}', response_text)
-        if json_match:
-            try:
-                menu_data = json.loads(json_match.group())
-                return {
-                    "menu": menu_data,
-                    "warnings": menu_data.get("warnings", [])
-                }
-            except json.JSONDecodeError as e:
-                return {"error": f"AI 回應格式錯誤：{str(e)}。回應內容：{response_text[:200]}..."}
-        else:
-            # 顯示 AI 實際回應以便診斷
-            preview = response_text[:300] if len(response_text) > 300 else response_text
-            return {"error": f"AI 回應不包含預期的 JSON 格式。回應內容：{preview}"}
-
-    except subprocess.TimeoutExpired:
-        return {"error": "辨識超時，請稍後再試"}
-    except Exception as e:
-        return {"error": f"辨識失敗：{str(e)}"}
-    finally:
-        # 清理暫存檔
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)

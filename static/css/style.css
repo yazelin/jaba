@@ -372,15 +372,21 @@ body::before {
 .chat-header {
   background: linear-gradient(135deg, #8B6914 0%, #A67B5B 100%);
   color: white;
-  padding: 20px;
-  text-align: center;
+  padding: 12px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .chat-header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5em;
+  font-size: 1.3em;
+  margin: 0;
+  flex: 1;
+  text-align: center;
 }
 
 .chat-messages {
@@ -541,20 +547,45 @@ body::before {
   margin-top: 10px;
 }
 
-/* 返回按鈕 */
+/* 返回按鈕（在 header 內） */
 .back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  color: #8B4513;
+  color: white;
   text-decoration: none;
-  font-size: 1.1em;
+  font-size: 0.95em;
   font-weight: 500;
-  transition: color 0.3s;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
 }
 
 .back-link:hover {
-  color: #5D2E0C;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+/* 獨立返回按鈕（密碼頁等） */
+.back-link-standalone {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: #5D4037;
+  background: rgba(255, 248, 220, 0.95);
+  border: 2px solid #D4A574;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.back-link-standalone:hover {
+  background: #FFF8DC;
+  border-color: #8B6914;
+  color: #8B6914;
+}
+
+/* Header spacer 用於平衡 flex 佈局 */
+.header-spacer {
+  width: 80px;
 }
 
 /* 空狀態 */
@@ -1471,6 +1502,16 @@ body::before {
 
 /* RWD */
 @media (max-width: 768px) {
+  /* 手機版減少容器間距 */
+  .container {
+    padding: 0;
+  }
+
+  .board {
+    border-radius: 0;
+    margin-top: 0;
+  }
+
   .board-title {
     font-size: 1.8em;
   }
@@ -1499,10 +1540,44 @@ body::before {
   }
 
   .team-chat {
-    width: calc(100% - 20px);
-    right: 10px;
-    left: 10px;
-    bottom: 10px;
+    width: 100%;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: 15px 15px 0 0;
+  }
+
+  .team-chat.minimized .team-chat-header {
+    border-radius: 15px 15px 0 0;
+  }
+
+  /* 手機版 header 調整 */
+  .chat-header {
+    padding: 10px 12px;
+    border-radius: 0;
+  }
+
+  .chat-header h1 {
+    font-size: 1.1em;
+  }
+
+  .back-link {
+    font-size: 0.85em;
+    padding: 6px 10px;
+  }
+
+  .header-spacer {
+    width: 60px;
+  }
+
+  /* 手機版 chat-container 滿版 */
+  .chat-container {
+    border-radius: 0;
+  }
+
+  /* 手機版面板間距縮減 */
+  .panel-card {
+    border-radius: 0;
   }
 
   /* 訂餐頁 RWD */
@@ -1565,12 +1640,14 @@ body::before {
   .order-three-columns {
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 40px);
+    min-height: 100vh;
+    gap: 0;
   }
 
   .order-left-panel,
   .order-right-panel {
     width: 100%;
+    gap: 0;
   }
 
   .order-left-panel {
@@ -1589,6 +1666,30 @@ body::before {
 
   .order-right-panel {
     order: 3;
+    padding-bottom: 80px; /* 避免美食評論區遮擋 */
+  }
+
+  /* 管理員頁三欄 RWD */
+  .admin-three-columns {
+    gap: 0;
+  }
+
+  .admin-left-panel,
+  .admin-right-panel {
+    gap: 0;
+  }
+
+  .admin-right-panel {
+    padding-bottom: 80px; /* 避免美食評論區遮擋 */
+  }
+
+  /* 面板內容間距微調 */
+  .panel-content {
+    padding: 12px;
+  }
+
+  .panel-header {
+    padding: 10px 12px;
   }
 }
 

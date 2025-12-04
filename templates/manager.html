@@ -9,10 +9,9 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
-  <a href="/" class="back-link">← 返回看板</a>
-
   <!-- 密碼驗證 -->
   <div class="password-container" id="password-section">
+    <a href="/" class="back-link back-link-standalone">← 返回看板</a>
     <div class="password-box">
       <h2>🔐 管理員登入</h2>
       <input type="password" id="password-input" placeholder="請輸入密碼" autofocus onkeypress="handlePasswordKeyPress(event)">
@@ -44,7 +43,9 @@
       <!-- 中間：對話區 -->
       <div class="chat-container">
         <div class="chat-header">
+          <a href="/" class="back-link">← 返回</a>
           <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸管理模式</h1>
+          <div class="header-spacer"></div>
         </div>
 
         <div class="chat-messages" id="chat-messages">

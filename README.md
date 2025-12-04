@@ -46,7 +46,6 @@ AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
 | 前端 | 純 HTML/CSS/JavaScript |
 | 資料存儲 | JSON 檔案 |
 | 套件管理 | uv |
-| 容器化 | Docker |
 
 ## 快速開始
 
@@ -68,21 +67,6 @@ export ANTHROPIC_API_KEY="your-api-key"
 # 啟動伺服器（預設 port 8098）
 uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 ```
-
-### Docker 部署
-
-```bash
-# 設定環境變數
-export ANTHROPIC_API_KEY="your-api-key"
-
-# 啟動容器
-docker compose up -d
-```
-
-容器會：
-- 在 port 8098 啟動服務
-- 將 `./data` 目錄掛載到容器內保存資料
-- 支援最大 20MB 圖片上傳（菜單辨識用）
 
 ## 使用指南
 
@@ -148,8 +132,6 @@ jaba/
 ├── static/                 # 靜態資源
 │   ├── css/style.css
 │   └── images/
-├── Dockerfile
-├── docker-compose.yml
 └── pyproject.toml
 ```
 

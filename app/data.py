@@ -574,3 +574,89 @@ def save_chat_message(username: str, content: str) -> dict:
 def save_system_message(content: str) -> dict:
     """儲存系統訊息（由呷爸發送）"""
     return save_chat_message("呷爸", content)
+
+
+# === AI 對話歷史管理 ===
+
+def get_ai_chat_history(
+    username: str,
+    is_manager: bool = False,
+    max_messages: int = 20
+) -> list[dict]:
+    """取得使用者當日的 AI 對話歷史
+
+    Args:
+        username: 使用者名稱
+        is_manager: 是否為管理員模式
+        max_messages: 最多返回的訊息數量（預設 20 條）
+
+    Returns:
+        對話歷史列表，每條包含 role, content, timestamp
+    """
+    today = date.today().isoformat()
+    mode = "manager" if is_manager else "order"
+    history_file = DATA_DIR / "users" / username / "chat_history" / f"{today}-{mode}.json"
+
+    data = read_json(history_file)
+    if not data:
+        return []
+
+    messages = data.get("messages", [])
+    # 只返回最近的 N 條訊息
+    return messages[-max_messages:]
+
+
+def append_ai_chat_history(
+    username: str,
+    role: str,
+    content: str,
+    is_manager: bool = False
+) -> None:
+    """新增一條 AI 對話記錄
+
+    Args:
+        username: 使用者名稱
+        role: 角色（"user" 或 "assistant"）
+        content: 訊息內容
+        is_manager: 是否為管理員模式
+    """
+    today = date.today().isoformat()
+    mode = "manager" if is_manager else "order"
+    history_dir = DATA_DIR / "users" / username / "chat_history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+    history_file = history_dir / f"{today}-{mode}.json"
+
+    data = read_json(history_file) or {
+        "date": today,
+        "mode": mode,
+        "messages": [],
+        "created_at": datetime.now().isoformat()
+    }
+
+    data["messages"].append({
+        "role": role,
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    })
+
+    write_json(history_file, data)
+
+
+def clear_ai_chat_history(username: str, is_manager: bool = False) -> bool:
+    """清除使用者當日的 AI 對話歷史
+
+    Args:
+        username: 使用者名稱
+        is_manager: 是否為管理員模式
+
+    Returns:
+        是否成功清除（檔案存在並被刪除）
+    """
+    today = date.today().isoformat()
+    mode = "manager" if is_manager else "order"
+    history_file = DATA_DIR / "users" / username / "chat_history" / f"{today}-{mode}.json"
+
+    if history_file.exists():
+        history_file.unlink()
+        return True
+    return False

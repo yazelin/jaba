@@ -1,9 +1,8 @@
 """AI CLI Provider 模組 - 支援多種 CLI 工具"""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
 
-from ..data import SessionInfo, DATA_DIR
+from ..data import DATA_DIR
 
 
 @dataclass
@@ -11,12 +10,14 @@ class CommandResult:
     """CLI 命令建構結果"""
     cmd: list[str]
     cwd: str
-    new_session_id: str | None = None  # Claude 用：新建的 UUID
-    is_new_session: bool = False  # 是否為新 session（用於 Gemini 事後追蹤）
 
 
 class BaseProvider(ABC):
-    """CLI Provider 抽象基底類別"""
+    """CLI Provider 抽象基底類別
+
+    注意：不再使用 CLI 內建的 session 機制，每次呼叫都是獨立對話。
+    對話歷史由 app/data.py 的 get_ai_chat_history() 等函數管理。
+    """
 
     @property
     @abstractmethod
@@ -30,7 +31,7 @@ class BaseProvider(ABC):
         model: str,
         prompt: str,
         system_prompt: str,
-        session_info: SessionInfo | None
+        session_info=None  # 保留參數向後相容，但不再使用
     ) -> CommandResult:
         """建構對話命令"""
         pass
@@ -48,21 +49,6 @@ class BaseProvider(ABC):
     @abstractmethod
     def parse_response(self, stdout: str, stderr: str, return_code: int) -> dict:
         """解析 CLI 回應"""
-        pass
-
-    @abstractmethod
-    def get_session_info_after_call(
-        self,
-        is_new_session: bool,
-        return_code: int,
-        is_manager: bool
-    ) -> SessionInfo | None:
-        """呼叫後取得 session 資訊（如 Gemini 需事後追蹤）"""
-        pass
-
-    @abstractmethod
-    def delete_session(self, session_info: SessionInfo) -> bool:
-        """刪除 session"""
         pass
 
 

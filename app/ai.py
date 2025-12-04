@@ -8,7 +8,6 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import data
-from .data import SessionInfo
 from .providers import get_provider
 
 
@@ -35,10 +34,18 @@ def build_context(username: str, is_manager: bool = False) -> dict:
     today_info = data.get_today_info()
     stores = data.get_active_stores()
 
+    # 取得使用者 profile（包含偏好稱呼）
+    profile = data.get_user_profile(username)
+    preferred_name = None
+    if profile:
+        preferred_name = profile.get("preferences", {}).get("preferred_name")
+
     context = {
         "today": date.today().isoformat(),
         "today_store": today_info,
         "available_stores": [{"id": s["id"], "name": s["name"], "note": s.get("note", "")} for s in stores],
+        "username": username,  # 使用者名稱
+        "preferred_name": preferred_name,  # 使用者偏好稱呼（如果有設定的話）
     }
 
     # 支援多店家：提供所有今日店家的菜單
@@ -57,9 +64,7 @@ def build_context(username: str, is_manager: bool = False) -> dict:
                 }
 
     if not is_manager:
-        context["username"] = username
-        # 取得使用者 profile（包含偏好設定）
-        profile = data.get_user_profile(username)
+        # 加入使用者完整偏好設定（已在前面取得 profile）
         if profile:
             context["user_profile"] = profile.get("preferences", {})
         # 取得使用者所有訂單
@@ -102,12 +107,32 @@ def _get_recent_store_history(days: int = 7) -> list:
     return history
 
 
+def _format_chat_history(history: list[dict]) -> str:
+    """格式化對話歷史為 prompt 可讀格式"""
+    if not history:
+        return "(無先前對話)"
+
+    lines = []
+    for msg in history:
+        role = "使用者" if msg["role"] == "user" else "助手"
+        lines.append(f"{role}: {msg['content']}")
+
+    return "\n".join(lines)
+
+
 def call_ai(
     username: str,
     message: str,
     is_manager: bool = False
 ) -> dict:
-    """呼叫 AI CLI（支援多種 Provider）"""
+    """呼叫 AI CLI（支援多種 Provider）
+
+    使用自管理的對話歷史，不依賴 CLI session 機制。
+    每次呼叫組合：系統上下文 + 對話歷史 + 當前訊息。
+    """
+    timings = {}
+    t_start = time.time()
+
     # 確保使用者存在
     data.ensure_user(username)
 
@@ -120,24 +145,26 @@ def call_ai(
     # 取得 provider
     provider = get_provider(provider_name)
 
-    # 取得或建立 session
-    session_info = data.get_session_info(username, is_manager)
+    # 取得對話歷史（最多 20 條）
+    history = data.get_ai_chat_history(username, is_manager)
 
-    # 檢查 session 是否與當前 provider 匹配
-    if session_info and session_info.provider != provider_name:
-        # Provider 改變，清除舊 session
-        data.clear_session_info(username, is_manager)
-        session_info = None
+    t_prep = time.time()
+    timings["prepare"] = round(t_prep - t_start, 3)
 
     system_prompt = get_system_prompt(is_manager)
     context = build_context(username, is_manager)
 
-    # 組合完整訊息
+    # 組合完整訊息（包含對話歷史）
     context_str = json.dumps(context, ensure_ascii=False, indent=2)
+    history_str = _format_chat_history(history)
+
     full_message = f"""[系統上下文]
 {context_str}
 
-[使用者訊息]
+[對話歷史]
+{history_str}
+
+[當前訊息]
 {message}
 
 請以 JSON 格式回應：
@@ -146,20 +173,17 @@ def call_ai(
 如果不需要執行動作，actions 可以是空陣列 []。
 如果需要執行多個步驟，在 actions 陣列中一次回傳所有動作。"""
 
-    # 使用 provider 建構命令
-    cmd_result = provider.build_chat_command(model, full_message, system_prompt, session_info)
+    t_build = time.time()
+    timings["build_prompt"] = round(t_build - t_prep, 3)
 
-    # 如果是 Claude 的新 session，先儲存 session_id
-    if cmd_result.new_session_id:
-        new_session_info = SessionInfo(
-            provider=provider_name,
-            session_id=cmd_result.new_session_id,
-            is_manager=is_manager,
-            created_at=datetime.now().isoformat()
-        )
-        data.save_session_info(username, new_session_info)
+    # 使用 provider 建構命令（不使用 session）
+    cmd_result = provider.build_chat_command(model, full_message, system_prompt, None)
+
+    # 先儲存使用者訊息到歷史
+    data.append_ai_chat_history(username, "user", message, is_manager)
 
     try:
+        t_cli_start = time.time()
         result = subprocess.run(
             cmd_result.cmd,
             capture_output=True,
@@ -167,31 +191,44 @@ def call_ai(
             timeout=120,
             cwd=cmd_result.cwd
         )
-
-        # 如果是新 session，讓 provider 追蹤（如 Gemini）
-        if cmd_result.is_new_session and not cmd_result.new_session_id:
-            new_session_info = provider.get_session_info_after_call(
-                is_new_session=True,
-                return_code=result.returncode,
-                is_manager=is_manager
-            )
-            if new_session_info:
-                data.save_session_info(username, new_session_info)
+        t_cli_end = time.time()
+        timings["cli_call"] = round(t_cli_end - t_cli_start, 3)
 
         # 使用 provider 解析回應
-        return provider.parse_response(result.stdout, result.stderr, result.returncode)
+        response = provider.parse_response(result.stdout, result.stderr, result.returncode)
+
+        t_parse = time.time()
+        timings["parse"] = round(t_parse - t_cli_end, 3)
+
+        # 儲存 AI 回應到歷史（只保存 message，不保存 actions）
+        ai_message = response.get("message", "")
+        if ai_message:
+            data.append_ai_chat_history(username, "assistant", ai_message, is_manager)
+
+        t_end = time.time()
+        timings["save_history"] = round(t_end - t_parse, 3)
+        timings["total"] = round(t_end - t_start, 3)
+
+        # 加入時間資訊到回應
+        response["_timings"] = timings
+        response["_provider"] = provider_name
+        response["_model"] = model
+
+        return response
 
     except subprocess.TimeoutExpired:
         return {
             "message": "抱歉，回應超時了，請再試一次。",
             "actions": [],
-            "error": "timeout"
+            "error": "timeout",
+            "_timings": timings
         }
     except Exception as e:
         return {
             "message": f"發生錯誤：{str(e)}",
             "actions": [],
-            "error": str(e)
+            "error": str(e),
+            "_timings": timings
         }
 
 
@@ -988,17 +1025,9 @@ def _clean_history_orders(action_data: dict) -> dict:
 
 
 def _reset_session(username: str, is_manager: bool) -> dict:
-    """重置對話 session，讓下次對話重新開始"""
-    # 先取得 session 資訊（用於 provider 刪除）
-    session_info = data.get_session_info(username, is_manager)
-
-    # 如果有 session，使用對應的 provider 刪除
-    if session_info:
-        provider = get_provider(session_info.provider)
-        provider.delete_session(session_info)
-
-    # 清除本地 session 資訊
-    cleared = data.clear_session_info(username, is_manager)
+    """重置對話記錄，讓下次對話重新開始"""
+    # 清除對話歷史
+    cleared = data.clear_ai_chat_history(username, is_manager)
     mode = "管理員" if is_manager else "一般"
     if cleared:
         return {

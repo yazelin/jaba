@@ -1,48 +1,215 @@
 {
   "store_id": "sample-store",
-  "updated_at": "2025-12-02T23:48:45.168739",
+  "updated_at": "2025-12-04T11:29:05.309832",
   "categories": [
     {
-      "name": "便當類",
+      "name": "主餐 (飯/麵)",
       "items": [
         {
-          "id": "chicken-leg",
-          "name": "雞腿便當",
-          "price": 85,
-          "description": "酥脆雞腿配三樣配菜",
+          "id": "item-0-0",
+          "name": "炸排骨飯/麵",
+          "price": 95,
+          "description": "套餐價格為125元。主餐可選擇飯或湯麵。",
           "available": true
         },
         {
-          "id": "pork-chop",
-          "name": "排骨便當",
-          "price": 80,
-          "description": "香酥排骨配三樣配菜",
+          "id": "item-0-1",
+          "name": "滷排骨飯/麵",
+          "price": 95,
+          "description": "套餐價格為125元。主餐可選擇飯或湯麵。",
           "available": true
         },
         {
-          "id": "fish",
-          "name": "魚排便當",
+          "id": "item-0-2",
+          "name": "經典香腸飯/麵",
+          "price": 70,
+          "description": "套餐價格為100元。主餐可選擇飯或湯麵。豬原料產地: 豬肉(台灣)、豬腸衣(美國)。",
+          "available": true
+        },
+        {
+          "id": "item-0-3",
+          "name": "椒麻雞飯/麵",
+          "price": 108,
+          "description": "套餐價格為138元。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-4",
+          "name": "炸雞腿飯/麵",
+          "price": 98,
+          "description": "套餐價格為128元。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-5",
+          "name": "玫瑰油雞飯/麵",
+          "price": 98,
+          "description": "套餐價格為128元。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-6",
+          "name": "椒鹽雞塊飯/麵",
+          "price": 65,
+          "description": "套餐價格為95元。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-7",
+          "name": "黃金塔塔鱈魚排飯/麵",
+          "price": 88,
+          "description": "套餐價格為118元。本產品使用鱈魚重組肉，僅供熟食，食用時請小心部分魚刺。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-8",
+          "name": "焢肉飯/麵",
+          "price": 69,
+          "description": "套餐價格為99元。主餐可選擇飯或湯麵。",
+          "available": true
+        },
+        {
+          "id": "item-0-9",
+          "name": "炸紅糟肉飯/麵",
           "price": 75,
-          "description": "香煎魚排配三樣配菜",
+          "description": "套餐價格為105元。主餐可選擇飯或湯麵。",
           "available": true
         }
       ]
     },
     {
-      "name": "湯品",
+      "name": "精選單品",
       "items": [
         {
-          "id": "miso-soup",
-          "name": "味噌湯",
-          "price": 20,
-          "description": "日式味噌湯",
+          "id": "item-1-0",
+          "name": "皮蛋嫩豆腐",
+          "price": 45,
+          "description": "",
+          "available": true,
+          "variants": [
+            {
+              "name": "椒麻",
+              "price": 50
+            },
+            {
+              "name": "原味",
+              "price": 45
+            }
+          ]
+        },
+        {
+          "id": "item-1-1",
+          "name": "椒麻炸豆腐",
+          "price": 45,
+          "description": "",
           "available": true
         },
         {
-          "id": "egg-soup",
-          "name": "蛋花湯",
+          "id": "item-1-2",
+          "name": "黃金炸豆腐",
+          "price": 35,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-3",
+          "name": "香滷豆腐",
+          "price": 20,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-4",
+          "name": "韓式泡菜",
+          "price": 35,
+          "description": "搭配主餐現折$10",
+          "available": true
+        },
+        {
+          "id": "item-1-5",
+          "name": "黃金泡菜",
+          "price": 35,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-6",
+          "name": "柚香蘿蔔",
+          "price": 20,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-1-7",
+          "name": "秋葵",
+          "price": 30,
+          "description": "以當日供應為主",
+          "available": true
+        },
+        {
+          "id": "item-1-8",
+          "name": "香滷鴨蛋",
+          "price": 19,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "湯品/青菜",
+      "items": [
+        {
+          "id": "item-2-0",
+          "name": "味噌湯",
+          "price": 30,
+          "description": "",
+          "available": true
+        },
+        {
+          "id": "item-2-1",
+          "name": "蘿蔔湯",
+          "price": 30,
+          "description": "冬季湯品",
+          "available": true
+        },
+        {
+          "id": "item-2-2",
+          "name": "竹筍湯",
+          "price": 30,
+          "description": "夏季湯品",
+          "available": true
+        },
+        {
+          "id": "item-2-3",
+          "name": "燙青菜",
+          "price": 35,
+          "description": "",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "飲品",
+      "items": [
+        {
+          "id": "item-3-0",
+          "name": "蜂蜜香檸茶",
           "price": 25,
-          "description": "清爽蛋花湯",
+          "description": "季節限定",
+          "available": true
+        },
+        {
+          "id": "item-3-1",
+          "name": "烏梅汁",
+          "price": 35,
+          "description": "季節限定",
+          "available": true
+        },
+        {
+          "id": "item-3-2",
+          "name": "古早味特調紅茶",
+          "price": 20,
+          "description": "",
           "available": true
         }
       ]

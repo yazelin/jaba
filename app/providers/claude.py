@@ -1,15 +1,17 @@
 """Claude CLI Provider"""
 import json
 import re
-import uuid
-from datetime import datetime
+from pathlib import Path
 
 from . import BaseProvider, CommandResult, DATA_DIR
-from ..data import SessionInfo
 
 
 class ClaudeProvider(BaseProvider):
-    """Claude CLI Provider 實作"""
+    """Claude CLI Provider 實作
+
+    注意：不再使用 Claude CLI 的 session 機制（--resume, --session-id）。
+    對話歷史由 app/data.py 的 get_ai_chat_history() 等函數管理。
+    """
 
     @property
     def name(self) -> str:
@@ -20,35 +22,20 @@ class ClaudeProvider(BaseProvider):
         model: str,
         prompt: str,
         system_prompt: str,
-        session_info: SessionInfo | None
+        session_info=None  # 保留參數向後相容，但不再使用
     ) -> CommandResult:
         """建構 Claude CLI 對話命令
 
         Claude CLI 特點：
         - 使用 -p 進行非互動式對話
         - 使用 --system-prompt 傳遞系統提示
-        - Session 使用 UUID，透過 --session-id 和 --resume 管理
+        - 不使用 --resume / --session-id（每次都是新對話，歷史由我們管理）
         """
-        cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt]
-        new_session_id = None
-        is_new_session = False
-
-        if session_info and session_info.session_id:
-            # 後續對話：恢復 session
-            cmd.extend(["--resume", session_info.session_id])
-        else:
-            # 首次對話：生成 UUID 並建立 session
-            new_session_id = str(uuid.uuid4())
-            cmd.extend(["--session-id", new_session_id])
-            is_new_session = True
-
-        cmd.append(prompt)
+        cmd = ["claude", "-p", "--model", model, "--system-prompt", system_prompt, prompt]
 
         return CommandResult(
             cmd=cmd,
-            cwd=str(DATA_DIR.parent),
-            new_session_id=new_session_id,
-            is_new_session=is_new_session
+            cwd=str(DATA_DIR.parent)
         )
 
     def build_menu_command(
@@ -114,19 +101,3 @@ class ClaudeProvider(BaseProvider):
                 "message": response_text,
                 "actions": []
             }
-
-    def get_session_info_after_call(
-        self,
-        is_new_session: bool,
-        return_code: int,
-        is_manager: bool
-    ) -> SessionInfo | None:
-        """Claude 在建構命令時就已經生成 session_id，不需要事後追蹤"""
-        # Claude 的 session_id 在 build_chat_command 時就已經設定
-        # 透過 CommandResult.new_session_id 回傳，由 call_ai 處理
-        return None
-
-    def delete_session(self, session_info: SessionInfo) -> bool:
-        """Claude CLI 不需要刪除遠端 session"""
-        # Claude 的 session 是本地管理，不需要呼叫 CLI 刪除
-        return True

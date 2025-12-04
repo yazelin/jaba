@@ -169,6 +169,9 @@ async def mark_paid(request: Request):
 @app.post("/api/chat")
 async def chat(request: Request):
     """與 AI 對話"""
+    import time
+    t_api_start = time.time()
+
     body = await request.json()
     username = body.get("username", "").strip()
     message = body.get("message", "").strip()
@@ -181,6 +184,8 @@ async def chat(request: Request):
 
     # 呼叫 AI
     response = ai.call_ai(username, message, is_manager)
+
+    t_ai_done = time.time()
 
     # 執行動作
     actions = response.get("actions", [])
@@ -204,13 +209,28 @@ async def chat(request: Request):
                 # 店家變更時，在團體聊天室新增系統訊息
                 if event_type == "store_changed" and result.get("store_name"):
                     store_name = result.get("store_name")
-                    message = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
-                    await sio.emit("chat_message", message)
+                    msg = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
+                    await sio.emit("chat_message", msg)
+
+    t_api_end = time.time()
+
+    # 取得 AI 內部的時間資訊
+    ai_timings = response.get("_timings", {})
 
     return {
         "message": response.get("message", ""),
         "actions": actions,
-        "action_results": action_results
+        "action_results": action_results,
+        "error": response.get("error"),
+        "_debug": {
+            "provider": response.get("_provider"),
+            "model": response.get("_model"),
+            "timings": {
+                **ai_timings,
+                "actions": round(t_api_end - t_ai_done, 3),
+                "api_total": round(t_api_end - t_api_start, 3)
+            }
+        }
     }
 
 
@@ -244,7 +264,7 @@ async def send_chat_message(request: Request):
 
 @app.post("/api/session/reset")
 async def reset_session(request: Request):
-    """重置使用者的 Claude session"""
+    """重置使用者的對話歷史"""
     body = await request.json()
     username = body.get("username", "").strip()
     is_manager = body.get("is_manager", False)
@@ -252,8 +272,8 @@ async def reset_session(request: Request):
     if not username:
         return JSONResponse({"error": "請輸入名稱"}, status_code=400)
 
-    # 清除 session
-    cleared = data.clear_session_id(username, is_manager)
+    # 清除對話歷史
+    cleared = data.clear_ai_chat_history(username, is_manager)
     return {"success": True, "cleared": cleared}
 
 

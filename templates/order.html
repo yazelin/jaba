@@ -543,8 +543,18 @@
         // 移除載入訊息
         document.getElementById(loadingId).remove();
 
-        // 顯示 AI 回應
-        addMessage('assistant', data.message || '抱歉，我沒有理解你的意思。');
+        // 根據錯誤類型顯示不同訊息
+        if (data.error) {
+          if (data.error === 'timeout') {
+            addMessage('assistant', '抱歉，回應超時了，請再試一次。');
+          } else {
+            // parse_error、no_response 等：顯示 AI 的實際回應
+            addMessage('assistant', data.message || '抱歉，我沒有理解你的意思。');
+          }
+        } else {
+          // 正常顯示 AI 回應
+          addMessage('assistant', data.message || '抱歉，我沒有理解你的意思。');
+        }
 
         // 如果有執行動作，顯示結果
         if (data.action_results && data.action_results.length > 0) {

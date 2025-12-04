@@ -1,4 +1,5 @@
 """AI CLI 整合模組 - 支援多種 CLI Provider"""
+import asyncio
 import subprocess
 import json
 import base64
@@ -30,9 +31,8 @@ def get_system_prompt(is_manager: bool = False) -> str:
 
 
 def build_context(username: str, is_manager: bool = False) -> dict:
-    """建立 AI 上下文"""
+    """建立 AI 上下文（精簡版，減少 token 使用量）"""
     today_info = data.get_today_info()
-    stores = data.get_active_stores()
 
     # 取得使用者 profile（包含偏好稱呼）
     profile = data.get_user_profile(username)
@@ -40,49 +40,90 @@ def build_context(username: str, is_manager: bool = False) -> dict:
     if profile:
         preferred_name = profile.get("preferences", {}).get("preferred_name")
 
+    # 簡化 today_stores 為店家名稱列表
+    today_stores = today_info.get("stores", [])
+    today_store_names = [s.get("store_name", "") for s in today_stores]
+
     context = {
         "today": date.today().isoformat(),
-        "today_store": today_info,
-        "available_stores": [{"id": s["id"], "name": s["name"], "note": s.get("note", "")} for s in stores],
-        "username": username,  # 使用者名稱
-        "preferred_name": preferred_name,  # 使用者偏好稱呼（如果有設定的話）
+        "today_stores": today_store_names,  # 簡化為名稱列表
+        "username": username,
+        "preferred_name": preferred_name,
     }
 
-    # 支援多店家：提供所有今日店家的菜單
-    today_stores = today_info.get("stores", [])
+    # 提供今日店家的精簡菜單
     if today_stores:
-        context["today_menus"] = {}
+        context["menus"] = {}
         for store_ref in today_stores:
             store_id = store_ref.get("store_id")
-            store_info = data.get_store(store_id)
             menu = data.get_menu(store_id)
             if menu:
-                context["today_menus"][store_id] = {
-                    "store_name": store_ref.get("store_name", ""),
-                    "note": store_info.get("note", "") if store_info else "",
-                    "menu": menu
+                context["menus"][store_id] = {
+                    "name": store_ref.get("store_name", ""),
+                    "menu": _slim_menu(menu)  # 使用精簡菜單
                 }
 
     if not is_manager:
-        # 加入使用者完整偏好設定（已在前面取得 profile）
+        # 使用者模式：加入偏好和訂單
         if profile:
             context["user_profile"] = profile.get("preferences", {})
-        # 取得使用者所有訂單
         user_orders = data.get_user_orders(username)
         if user_orders:
             context["current_orders"] = user_orders
 
     if is_manager:
+        # 管理員模式：需要店家列表來設定今日店家
+        stores = data.get_active_stores()
+        context["available_stores"] = [{"id": s["id"], "name": s["name"]} for s in stores]
+
+        # 精簡 today_summary，只保留統計
         summary = data.get_daily_summary()
         if summary:
-            context["today_summary"] = summary
+            context["today_summary"] = {
+                "order_count": len(summary.get("orders", [])),
+                "grand_total": summary.get("grand_total", 0),
+                "item_summary": summary.get("item_summary", [])
+            }
+
         payments = data.get_payments()
         if payments:
             context["payments"] = payments
-        # 提供過去 7 天的店家歷史記錄，供 AI 建議今日店家
+
+        # 提供過去 7 天的店家歷史記錄
         context["recent_store_history"] = _get_recent_store_history(7)
 
     return context
+
+
+def _slim_menu(menu: dict) -> dict:
+    """精簡菜單資訊，只保留 AI 必要欄位以減少 token 使用量
+
+    移除：description、available、store_id、updated_at
+    保留：categories -> items 中的 id、name、price、variants
+    """
+    if not menu:
+        return {}
+
+    slim_categories = []
+    for cat in menu.get("categories", []):
+        slim_items = []
+        for item in cat.get("items", []):
+            slim_item = {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "price": item.get("price")
+            }
+            # 只有有 variants 時才加入
+            if item.get("variants"):
+                slim_item["variants"] = item["variants"]
+            slim_items.append(slim_item)
+
+        slim_categories.append({
+            "name": cat.get("name"),
+            "items": slim_items
+        })
+
+    return {"categories": slim_categories}
 
 
 def _get_recent_store_history(days: int = 7) -> list:
@@ -120,7 +161,7 @@ def _format_chat_history(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def call_ai(
+async def call_ai(
     username: str,
     message: str,
     is_manager: bool = False
@@ -129,6 +170,7 @@ def call_ai(
 
     使用自管理的對話歷史，不依賴 CLI session 機制。
     每次呼叫組合：系統上下文 + 對話歷史 + 當前訊息。
+    使用 asyncio 非同步執行，不阻塞其他請求。
     """
     timings = {}
     t_start = time.time()
@@ -184,18 +226,26 @@ def call_ai(
 
     try:
         t_cli_start = time.time()
-        result = subprocess.run(
-            cmd_result.cmd,
-            capture_output=True,
-            text=True,
-            timeout=120,
+
+        # 使用 asyncio 非同步執行 subprocess，不阻塞 event loop
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_result.cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=cmd_result.cwd
         )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=120
+        )
+        stdout = stdout_bytes.decode('utf-8') if stdout_bytes else ''
+        stderr = stderr_bytes.decode('utf-8') if stderr_bytes else ''
+
         t_cli_end = time.time()
         timings["cli_call"] = round(t_cli_end - t_cli_start, 3)
 
         # 使用 provider 解析回應
-        response = provider.parse_response(result.stdout, result.stderr, result.returncode)
+        response = provider.parse_response(stdout, stderr, proc.returncode)
 
         t_parse = time.time()
         timings["parse"] = round(t_parse - t_cli_end, 3)
@@ -216,7 +266,7 @@ def call_ai(
 
         return response
 
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return {
             "message": "抱歉，回應超時了，請再試一次。",
             "actions": [],
@@ -232,8 +282,11 @@ def call_ai(
         }
 
 
-def recognize_menu_image(image_base64: str) -> dict:
-    """使用 AI Vision 辨識菜單圖片"""
+async def recognize_menu_image(image_base64: str) -> dict:
+    """使用 AI Vision 辨識菜單圖片
+
+    使用 asyncio 非同步執行，不阻塞其他請求。
+    """
     # 移除 data URL 前綴（如果有）
     if ',' in image_base64:
         image_base64 = image_base64.split(',')[1]
@@ -268,19 +321,22 @@ def recognize_menu_image(image_base64: str) -> dict:
         # 使用 provider 建構菜單辨識命令
         cmd_result = provider.build_menu_command(model, prompt, temp_path)
 
-        result = subprocess.run(
-            cmd_result.cmd,
-            capture_output=True,
-            text=True,
-            timeout=180,  # 圖片辨識可能需要較長時間
+        # 使用 asyncio 非同步執行 subprocess，不阻塞 event loop
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_result.cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=cmd_result.cwd
         )
-
-        response_text = result.stdout.strip()
-        error_text = result.stderr.strip()
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=300  # 圖片辨識可能需要較長時間
+        )
+        response_text = (stdout_bytes.decode('utf-8') if stdout_bytes else '').strip()
+        error_text = (stderr_bytes.decode('utf-8') if stderr_bytes else '').strip()
 
         # 檢查是否有錯誤
-        if result.returncode != 0:
+        if proc.returncode != 0:
             error_msg = error_text or response_text or "未知錯誤"
             return {"error": f"{provider_name.upper()} CLI 執行失敗：{error_msg}"}
 
@@ -304,7 +360,7 @@ def recognize_menu_image(image_base64: str) -> dict:
             preview = response_text[:300] if len(response_text) > 300 else response_text
             return {"error": f"AI 回應不包含預期的 JSON 格式。回應內容：{preview}"}
 
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return {"error": "辨識超時，請稍後再試"}
     except Exception as e:
         return {"error": f"辨識失敗：{str(e)}"}

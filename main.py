@@ -182,8 +182,8 @@ async def chat(request: Request):
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
 
-    # 呼叫 AI
-    response = ai.call_ai(username, message, is_manager)
+    # 呼叫 AI（非同步，不阻塞其他請求）
+    response = await ai.call_ai(username, message, is_manager)
 
     t_ai_done = time.time()
 
@@ -331,8 +331,8 @@ async def recognize_menu(request: Request):
     if not store_id:
         return JSONResponse({"error": "請選擇店家或輸入新店家名稱"}, status_code=400)
 
-    # 呼叫 AI 辨識
-    result = ai.recognize_menu_image(image_base64)
+    # 呼叫 AI 辨識（非同步，不阻塞其他請求）
+    result = await ai.recognize_menu_image(image_base64)
 
     if result.get("error"):
         return JSONResponse({"error": result["error"]}, status_code=500)

@@ -42,7 +42,7 @@ AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
 | 組件 | 技術 |
 |------|------|
 | 後端框架 | FastAPI + Socket.IO (ASGI) |
-| AI 整合 | Claude CLI (支援 Claude / Gemini) |
+| AI 整合 | Claude CLI / Gemini CLI (Provider 模組化架構) |
 | 前端 | 純 HTML/CSS/JavaScript |
 | 資料存儲 | JSON 檔案 |
 | 套件管理 | uv |
@@ -114,8 +114,12 @@ docker compose up -d
 jaba/
 ├── main.py                 # FastAPI 應用程式入口
 ├── app/
-│   ├── claude.py           # AI CLI 整合模組
-│   └── data.py             # 資料存取模組
+│   ├── ai.py               # AI 整合主入口
+│   ├── data.py             # 資料存取模組
+│   └── providers/          # CLI Provider 模組
+│       ├── __init__.py     # BaseProvider 抽象類別與工廠
+│       ├── claude.py       # Claude CLI 實作
+│       └── gemini.py       # Gemini CLI 實作
 ├── data/
 │   ├── stores/             # 店家資料與菜單
 │   │   └── {store_id}/

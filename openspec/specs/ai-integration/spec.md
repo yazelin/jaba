@@ -585,3 +585,47 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **WHEN** 前端處理回應
 - **THEN** 顯示 `message` 欄位的內容
 
+### Requirement: 非同步 AI CLI 執行
+
+系統 SHALL 使用非同步方式執行 AI CLI 命令，避免阻塞其他請求。
+
+#### Scenario: 非同步執行 AI 對話
+- **GIVEN** 使用者發送對話訊息
+- **WHEN** 後端呼叫 AI CLI
+- **THEN** 使用 `asyncio.create_subprocess_exec()` 非同步執行
+- **AND** 其他使用者的請求不受影響
+
+#### Scenario: 非同步執行菜單辨識
+- **GIVEN** 管理員上傳菜單圖片
+- **WHEN** 後端呼叫 AI 辨識
+- **THEN** 使用 `asyncio.create_subprocess_exec()` 非同步執行
+- **AND** 其他使用者可正常載入頁面和聊天
+
+#### Scenario: 處理超時
+- **GIVEN** AI CLI 執行中
+- **WHEN** 超過設定的 timeout 時間
+- **THEN** 使用 `asyncio.wait_for()` 取消任務
+- **AND** 回傳超時錯誤訊息
+
+### Requirement: 精簡 AI Context
+
+系統 SHALL 在建立 AI 上下文時只包含必要資訊，減少 token 使用量以加快回應速度。
+
+#### Scenario: 精簡菜單資訊
+- **GIVEN** 建立 AI 上下文
+- **WHEN** 包含今日菜單
+- **THEN** 只保留品項的 `id`、`name`、`price`、`variants`
+- **AND** 移除 `description`、`available`、`store_id`、`updated_at`
+
+#### Scenario: 使用者模式精簡
+- **GIVEN** 呼叫 `build_context(username, is_manager=False)`
+- **WHEN** 建立使用者上下文
+- **THEN** 不包含 `available_stores`（訂購頁已有 today_menus）
+- **AND** `today_store` 只包含店家名稱列表
+
+#### Scenario: 管理員模式精簡
+- **GIVEN** 呼叫 `build_context(username, is_manager=True)`
+- **WHEN** 建立管理員上下文
+- **THEN** 保留 `available_stores`（管理員需要設定店家）
+- **AND** `today_summary` 只包含統計數據，不含完整訂單明細
+

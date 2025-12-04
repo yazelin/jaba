@@ -31,7 +31,7 @@ def get_system_prompt(is_manager: bool = False) -> str:
 
 
 def build_context(username: str, is_manager: bool = False) -> dict:
-    """建立 AI 上下文（精簡版，減少 token 使用量）"""
+    """建立 AI 上下文（完整版，讓呷爸能提供高品質的個人化服務）"""
     today_info = data.get_today_info()
 
     # 取得使用者 profile（包含偏好稱呼）
@@ -40,18 +40,17 @@ def build_context(username: str, is_manager: bool = False) -> dict:
     if profile:
         preferred_name = profile.get("preferences", {}).get("preferred_name")
 
-    # 簡化 today_stores 為店家名稱列表
+    # 今日店家完整資訊
     today_stores = today_info.get("stores", [])
-    today_store_names = [s.get("store_name", "") for s in today_stores]
 
     context = {
         "today": date.today().isoformat(),
-        "today_stores": today_store_names,  # 簡化為名稱列表
+        "today_stores": today_stores,  # 完整店家資訊
         "username": username,
         "preferred_name": preferred_name,
     }
 
-    # 提供今日店家的精簡菜單
+    # 提供今日店家的完整菜單（包含 description 供呷爸參考）
     if today_stores:
         context["menus"] = {}
         for store_ref in today_stores:
@@ -60,7 +59,7 @@ def build_context(username: str, is_manager: bool = False) -> dict:
             if menu:
                 context["menus"][store_id] = {
                     "name": store_ref.get("store_name", ""),
-                    "menu": _slim_menu(menu)  # 使用精簡菜單
+                    "menu": menu  # 完整菜單資訊
                 }
 
     if not is_manager:
@@ -76,14 +75,10 @@ def build_context(username: str, is_manager: bool = False) -> dict:
         stores = data.get_active_stores()
         context["available_stores"] = [{"id": s["id"], "name": s["name"]} for s in stores]
 
-        # 精簡 today_summary，只保留統計
+        # 完整 today_summary，包含訂單明細供管理員查看
         summary = data.get_daily_summary()
         if summary:
-            context["today_summary"] = {
-                "order_count": len(summary.get("orders", [])),
-                "grand_total": summary.get("grand_total", 0),
-                "item_summary": summary.get("item_summary", [])
-            }
+            context["today_summary"] = summary  # 完整訂單明細
 
         payments = data.get_payments()
         if payments:
@@ -93,37 +88,6 @@ def build_context(username: str, is_manager: bool = False) -> dict:
         context["recent_store_history"] = _get_recent_store_history(7)
 
     return context
-
-
-def _slim_menu(menu: dict) -> dict:
-    """精簡菜單資訊，只保留 AI 必要欄位以減少 token 使用量
-
-    移除：description、available、store_id、updated_at
-    保留：categories -> items 中的 id、name、price、variants
-    """
-    if not menu:
-        return {}
-
-    slim_categories = []
-    for cat in menu.get("categories", []):
-        slim_items = []
-        for item in cat.get("items", []):
-            slim_item = {
-                "id": item.get("id"),
-                "name": item.get("name"),
-                "price": item.get("price")
-            }
-            # 只有有 variants 時才加入
-            if item.get("variants"):
-                slim_item["variants"] = item["variants"]
-            slim_items.append(slim_item)
-
-        slim_categories.append({
-            "name": cat.get("name"),
-            "items": slim_items
-        })
-
-    return {"categories": slim_categories}
 
 
 def _get_recent_store_history(days: int = 7) -> list:

@@ -607,25 +607,26 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **THEN** 使用 `asyncio.wait_for()` 取消任務
 - **AND** 回傳超時錯誤訊息
 
-### Requirement: 精簡 AI Context
+### Requirement: 完整 AI Context
 
-系統 SHALL 在建立 AI 上下文時只包含必要資訊，減少 token 使用量以加快回應速度。
+系統 SHALL 在建立 AI 上下文時提供完整資訊，讓呷爸能提供高品質的個人化服務。
 
-#### Scenario: 精簡菜單資訊
+#### Scenario: 完整菜單資訊
 - **GIVEN** 建立 AI 上下文
 - **WHEN** 包含今日菜單
-- **THEN** 只保留品項的 `id`、`name`、`price`、`variants`
-- **AND** 移除 `description`、`available`、`store_id`、`updated_at`
+- **THEN** 保留品項的完整欄位（`id`、`name`、`price`、`description`、`variants` 等）
+- **AND** 讓呷爸能根據菜品描述提供建議
 
-#### Scenario: 使用者模式精簡
+#### Scenario: 使用者模式完整資訊
 - **GIVEN** 呼叫 `build_context(username, is_manager=False)`
 - **WHEN** 建立使用者上下文
-- **THEN** 不包含 `available_stores`（訂購頁已有 today_menus）
-- **AND** `today_store` 只包含店家名稱列表
+- **THEN** 包含今日店家的完整菜單資訊
+- **AND** 包含使用者偏好和現有訂單
 
-#### Scenario: 管理員模式精簡
+#### Scenario: 管理員模式完整資訊
 - **GIVEN** 呼叫 `build_context(username, is_manager=True)`
 - **WHEN** 建立管理員上下文
-- **THEN** 保留 `available_stores`（管理員需要設定店家）
-- **AND** `today_summary` 只包含統計數據，不含完整訂單明細
+- **THEN** 包含 `available_stores` 完整店家列表
+- **AND** `today_summary` 包含完整訂單明細（各使用者的品項、數量、備註等）
+- **AND** 包含付款狀態和歷史店家記錄
 

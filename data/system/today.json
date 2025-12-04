@@ -1,12 +1,4 @@
 {
   "date": "2025-12-04",
-  "stores": [
-    {
-      "store_id": "sample-store",
-      "store_name": "範例便當店",
-      "status": "open",
-      "set_by": "管理員",
-      "set_at": "2025-12-04T11:13:54.531008"
-    }
-  ]
+  "stores": []
 }

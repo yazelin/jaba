@@ -1,6 +1,6 @@
 {
   "store_id": "coco",
-  "updated_at": "2025-12-03T23:06:36.098680",
+  "updated_at": "2025-12-08T11:51:16.224779",
   "categories": [
     {
       "name": "無咖啡因",
@@ -628,6 +628,75 @@
             {
               "name": "L",
               "price": 65
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "特價優惠",
+      "items": [
+        {
+          "id": "item-1",
+          "name": "職人咖啡全品項",
+          "price": 0,
+          "description": "週二咖啡日活動",
+          "available": true,
+          "promo": {
+            "type": "buy_one_get_one",
+            "label": "買一送一（同價位買一送一）"
+          }
+        },
+        {
+          "id": "item-2",
+          "name": "小湯圓奶茶",
+          "price": 0,
+          "variants": [
+            {
+              "name": "L",
+              "price": 50
+            }
+          ],
+          "description": "QQ可愛的紅白小湯圓，搭配香濃奶茶～暖心好喝",
+          "available": true,
+          "promo": {
+            "type": "second_discount",
+            "label": "第二杯0元（12/3好友日限定）",
+            "second_price": 0
+          }
+        },
+        {
+          "id": "item-4",
+          "name": "冬顏搖搖珍奶",
+          "price": 88,
+          "variants": [
+            {
+              "name": "L",
+              "price": 88
+            }
+          ],
+          "description": "12月好友禮 - 憑券任選兩杯88元，每個人有6張券",
+          "available": true,
+          "promo": {
+            "type": "bundle_deal",
+            "label": "任選兩杯88元"
+          }
+        },
+        {
+          "id": "item-3",
+          "name": "百香雙響炮",
+          "price": 0,
+          "description": "冬顏搖搖珍奶",
+          "available": true,
+          "promo": {
+            "type": "second_discount",
+            "label": "憑券任選兩杯88元",
+            "second_price": 88
+          },
+          "variants": [
+            {
+              "name": "L",
+              "price": 0
             }
           ]
         }

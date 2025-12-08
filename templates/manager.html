@@ -137,7 +137,7 @@
         <!-- 步驟 2：辨識中 -->
         <div id="recognizing-step" class="upload-step" style="display: none;">
           <div class="loading-jaba">
-            <img src="/static/images/jaba.png" alt="呷爸" class="loading-jaba-icon">
+            <img src="/static/images/jaba-keyin.png" alt="呷爸" class="loading-jaba-icon">
             <div class="loading-spinner-ring"></div>
           </div>
           <div class="loading-text">呷爸正在努力 key 菜單...</div>
@@ -984,6 +984,9 @@
     let recognizedMenu = null;
     let targetStoreId = null;
     let isEditMode = false;  // 是否為編輯模式（直接編輯現有菜單）
+    let menuDiff = null;     // 差異比對結果
+    let existingMenu = null; // 現有菜單
+    let isDiffMode = false;  // 是否為差異預覽模式
 
     function openMenuUpload() {
       document.getElementById('menu-upload-modal').style.display = 'flex';
@@ -1008,6 +1011,9 @@
       recognizedMenu = null;
       targetStoreId = null;
       isEditMode = false;
+      menuDiff = null;
+      existingMenu = null;
+      isDiffMode = false;
       document.getElementById('upload-step').style.display = 'block';
       document.getElementById('recognizing-step').style.display = 'none';
       document.getElementById('result-step').style.display = 'none';
@@ -1148,9 +1154,19 @@
 
         targetStoreId = data.store_id;
         recognizedMenu = data.recognized_menu;
+        existingMenu = data.existing_menu;
+        menuDiff = data.diff;
+
+        // 判斷是否使用差異預覽模式（有現有菜單且有差異）
+        isDiffMode = existingMenu && menuDiff &&
+          (menuDiff.added.length > 0 || menuDiff.modified.length > 0 || menuDiff.removed.length > 0);
 
         // 顯示結果
-        showRecognitionResult(data.recognized_menu, data.warnings);
+        if (isDiffMode) {
+          showDiffPreview(menuDiff, data.warnings);
+        } else {
+          showRecognitionResult(data.recognized_menu, data.warnings);
+        }
 
       } catch (err) {
         console.error('辨識失敗:', err);
@@ -1202,7 +1218,190 @@
       }
 
       html += '<button class="btn btn-secondary" onclick="addCategory()">+ 新增分類</button>';
+
+      // 如果有差異資料，顯示返回差異預覽的按鈕
+      if (menuDiff && (menuDiff.added.length > 0 || menuDiff.modified.length > 0 || menuDiff.removed.length > 0)) {
+        html += '<button class="btn btn-link" onclick="switchToDiffPreview()">← 返回差異預覽模式</button>';
+      }
+
       editor.innerHTML = html;
+    }
+
+    // 差異預覽模式
+    function showDiffPreview(diff, warnings) {
+      document.getElementById('recognizing-step').style.display = 'none';
+      document.getElementById('result-step').style.display = 'block';
+
+      // 顯示警告
+      const warningsEl = document.getElementById('result-warnings');
+      if (warnings && warnings.length > 0) {
+        warningsEl.innerHTML = '<div class="warning-box">⚠️ ' + warnings.join('<br>') + '</div>';
+      } else {
+        warningsEl.innerHTML = '';
+      }
+
+      // 生成差異預覽
+      const editor = document.getElementById('result-editor');
+      let html = '<div class="diff-preview">';
+
+      // 新增品項
+      if (diff.added.length > 0) {
+        html += `
+          <div class="diff-section diff-added">
+            <div class="diff-section-header">
+              <span class="diff-icon">✅</span>
+              <span>新增品項 (${diff.added.length})</span>
+              <label class="diff-select-all">
+                <input type="checkbox" checked onchange="toggleDiffSection(this, 'added')"> 全選
+              </label>
+            </div>
+            <div class="diff-items">
+        `;
+        diff.added.forEach((d, idx) => {
+          const item = d.item;
+          const priceDisplay = item.variants && item.variants.length > 0
+            ? item.variants.map(v => `${v.name} $${v.price}`).join(' / ')
+            : `$${item.price}`;
+          const promoLabel = item.promo ? `<span class="promo-tag">${item.promo.label}</span>` : '';
+          html += `
+            <div class="diff-item" data-type="added" data-idx="${idx}">
+              <label>
+                <input type="checkbox" class="diff-checkbox" data-type="added" data-idx="${idx}" checked>
+                <span class="diff-marker added">🟢</span>
+                <span class="diff-item-name">${item.name}</span>
+                <span class="diff-item-price">${priceDisplay}</span>
+                ${promoLabel}
+                <span class="diff-item-category">[${d.category}]</span>
+              </label>
+            </div>
+          `;
+        });
+        html += '</div></div>';
+      }
+
+      // 修改品項
+      if (diff.modified.length > 0) {
+        html += `
+          <div class="diff-section diff-modified">
+            <div class="diff-section-header">
+              <span class="diff-icon">⚠️</span>
+              <span>修改品項 (${diff.modified.length})</span>
+              <label class="diff-select-all">
+                <input type="checkbox" checked onchange="toggleDiffSection(this, 'modified')"> 全選
+              </label>
+            </div>
+            <div class="diff-items">
+        `;
+        diff.modified.forEach((d, idx) => {
+          const changes = d.changes.join('、');
+          const newItem = d.new_item;
+          const promoLabel = newItem.promo ? `<span class="promo-tag">${newItem.promo.label}</span>` : '';
+          html += `
+            <div class="diff-item" data-type="modified" data-idx="${idx}">
+              <label>
+                <input type="checkbox" class="diff-checkbox" data-type="modified" data-idx="${idx}" checked>
+                <span class="diff-marker modified">🟡</span>
+                <span class="diff-item-name">${newItem.name}</span>
+                ${promoLabel}
+                <span class="diff-item-changes">${changes}</span>
+              </label>
+            </div>
+          `;
+        });
+        html += '</div></div>';
+      }
+
+      // 可刪除品項
+      if (diff.removed.length > 0) {
+        html += `
+          <div class="diff-section diff-removed">
+            <div class="diff-section-header">
+              <span class="diff-icon">🗑️</span>
+              <span>可刪除品項 (${diff.removed.length})</span>
+              <label class="diff-select-all">
+                <input type="checkbox" onchange="toggleDiffSection(this, 'removed')"> 全選
+              </label>
+            </div>
+            <div class="diff-items">
+        `;
+        diff.removed.forEach((d, idx) => {
+          const item = d.item;
+          const priceDisplay = item.variants && item.variants.length > 0
+            ? item.variants.map(v => `${v.name} $${v.price}`).join(' / ')
+            : `$${item.price}`;
+          html += `
+            <div class="diff-item" data-type="removed" data-idx="${idx}">
+              <label>
+                <input type="checkbox" class="diff-checkbox" data-type="removed" data-idx="${idx}">
+                <span class="diff-marker removed">🔴</span>
+                <span class="diff-item-name">${item.name}</span>
+                <span class="diff-item-price">${priceDisplay}</span>
+                <span class="diff-item-hint">(新菜單中未出現)</span>
+              </label>
+            </div>
+          `;
+        });
+        html += '</div></div>';
+      }
+
+      // 未變更品項（摺疊顯示）
+      if (diff.unchanged.length > 0) {
+        html += `
+          <div class="diff-section diff-unchanged">
+            <div class="diff-section-header collapsed" onclick="toggleUnchangedSection()">
+              <span class="diff-icon">✓</span>
+              <span>未變更品項 (${diff.unchanged.length})</span>
+              <span class="diff-toggle" id="unchanged-toggle">▶</span>
+            </div>
+            <div class="diff-items" id="unchanged-items" style="display: none;">
+        `;
+        diff.unchanged.forEach(d => {
+          html += `
+            <div class="diff-item unchanged">
+              <span class="diff-item-name">${d.item.name}</span>
+              <span class="diff-item-category">[${d.category}]</span>
+            </div>
+          `;
+        });
+        html += '</div></div>';
+      }
+
+      html += '</div>';
+
+      // 切換到完整編輯模式的按鈕
+      html += '<button class="btn btn-link" onclick="switchToFullEdit()">切換到完整編輯模式</button>';
+
+      editor.innerHTML = html;
+    }
+
+    function toggleDiffSection(checkbox, type) {
+      document.querySelectorAll(`.diff-checkbox[data-type="${type}"]`).forEach(cb => {
+        cb.checked = checkbox.checked;
+      });
+    }
+
+    function toggleUnchangedSection() {
+      const items = document.getElementById('unchanged-items');
+      const toggle = document.getElementById('unchanged-toggle');
+      if (items.style.display === 'none') {
+        items.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        items.style.display = 'none';
+        toggle.textContent = '▶';
+      }
+    }
+
+    function switchToFullEdit() {
+      isDiffMode = false;
+      showRecognitionResult(recognizedMenu, []);
+    }
+
+    function switchToDiffPreview() {
+      if (menuDiff) {
+        isDiffMode = true;
+        showDiffPreview(menuDiff, []);
+      }
     }
 
     function generateItemRow(catIdx, itemIdx, item) {
@@ -1291,6 +1490,12 @@
 
     // 儲存辨識結果
     async function saveRecognizedMenu() {
+      // 差異模式儲存
+      if (isDiffMode && menuDiff) {
+        await saveDiffMenu();
+        return;
+      }
+
       // 從 DOM 收集編輯後的資料
       const categories = [];
       document.querySelectorAll('.result-category').forEach((catEl, catIdx) => {
@@ -1352,6 +1557,70 @@
         closeMenuUpload();
         loadAllStores();
         showNotification('菜單已儲存！');
+
+      } catch (err) {
+        console.error('儲存失敗:', err);
+        alert('儲存失敗：' + err.message);
+      }
+    }
+
+    // 差異模式儲存
+    async function saveDiffMenu() {
+      const applyItems = [];
+      const removeItems = [];
+
+      // 收集勾選的新增品項
+      document.querySelectorAll('.diff-checkbox[data-type="added"]:checked').forEach(cb => {
+        const idx = parseInt(cb.dataset.idx);
+        const d = menuDiff.added[idx];
+        applyItems.push({
+          item: d.item,
+          category: d.category
+        });
+      });
+
+      // 收集勾選的修改品項
+      document.querySelectorAll('.diff-checkbox[data-type="modified"]:checked').forEach(cb => {
+        const idx = parseInt(cb.dataset.idx);
+        const d = menuDiff.modified[idx];
+        applyItems.push({
+          item: d.new_item,
+          category: d.category
+        });
+      });
+
+      // 收集勾選的刪除品項
+      document.querySelectorAll('.diff-checkbox[data-type="removed"]:checked').forEach(cb => {
+        const idx = parseInt(cb.dataset.idx);
+        const d = menuDiff.removed[idx];
+        removeItems.push(d.item.id);
+      });
+
+      // 呼叫 API 差異儲存
+      try {
+        const res = await fetch('/api/save-menu', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            store_id: targetStoreId,
+            diff_mode: true,
+            apply_items: applyItems,
+            remove_items: removeItems
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || '儲存失敗');
+        }
+
+        closeMenuUpload();
+        loadAllStores();
+
+        const addedCount = applyItems.length;
+        const removedCount = removeItems.length;
+        showNotification(`菜單已更新！新增/修改 ${addedCount} 項，刪除 ${removedCount} 項`);
 
       } catch (err) {
         console.error('儲存失敗:', err);

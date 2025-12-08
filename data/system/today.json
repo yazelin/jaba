@@ -1,12 +1,12 @@
 {
-  "date": "2025-12-04",
+  "date": "2025-12-08",
   "stores": [
     {
-      "store_id": "store-2df76676",
-      "store_name": "宏昇燒臘",
+      "store_id": "coco",
+      "store_name": "CoCo都可茶飲",
       "status": "open",
       "set_by": "管理員",
-      "set_at": "2025-12-04T13:25:58.678139"
+      "set_at": "2025-12-08T11:43:13.624177"
     }
   ]
 }

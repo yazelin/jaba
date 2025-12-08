@@ -2202,3 +2202,173 @@ body::before {
     width: 100%;
   }
 }
+
+/* === 菜單差異預覽 === */
+.diff-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.diff-section {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.diff-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.diff-section-header.collapsed {
+  cursor: pointer;
+}
+
+.diff-section-header.collapsed:hover {
+  opacity: 0.9;
+}
+
+.diff-select-all {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.diff-select-all input {
+  margin-right: 5px;
+}
+
+.diff-toggle {
+  margin-left: auto;
+  color: #666;
+}
+
+.diff-icon {
+  font-size: 1.1em;
+}
+
+.diff-items {
+  padding: 5px 15px 15px;
+}
+
+.diff-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  background: rgba(255,255,255,0.5);
+}
+
+.diff-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.diff-item.unchanged {
+  opacity: 0.7;
+  padding-left: 30px;
+}
+
+.diff-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.diff-marker {
+  font-size: 1.1em;
+}
+
+.diff-item-name {
+  font-weight: 500;
+}
+
+.diff-item-price {
+  color: #d84315;
+  font-weight: 500;
+}
+
+.diff-item-changes {
+  color: #f57c00;
+  font-size: 0.9em;
+}
+
+.diff-item-category {
+  color: #888;
+  font-size: 0.85em;
+}
+
+.diff-item-hint {
+  color: #999;
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+/* 差異區塊顏色 */
+.diff-section.diff-added .diff-section-header {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+.diff-section.diff-added .diff-items {
+  background: #e8f5e9;
+}
+
+.diff-section.diff-modified .diff-section-header {
+  background: #fff3e0;
+  color: #e65100;
+}
+.diff-section.diff-modified .diff-items {
+  background: #fff8e1;
+}
+
+.diff-section.diff-removed .diff-section-header {
+  background: #ffcdd2;
+  color: #c62828;
+}
+.diff-section.diff-removed .diff-items {
+  background: #ffebee;
+}
+
+.diff-section.diff-unchanged .diff-section-header {
+  background: #e0e0e0;
+  color: #616161;
+}
+.diff-section.diff-unchanged .diff-items {
+  background: #f5f5f5;
+}
+
+/* 促銷標籤 */
+.promo-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  color: white;
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* 切換按鈕 */
+.btn-link {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.9em;
+  padding: 10px 0;
+}
+
+.btn-link:hover {
+  color: #0d47a1;
+}

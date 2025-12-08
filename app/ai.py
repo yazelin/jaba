@@ -246,6 +246,131 @@ async def call_ai(
         }
 
 
+def compare_menus(existing_menu: dict | None, recognized_menu: dict) -> dict:
+    """比對現有菜單與辨識結果的差異
+
+    Args:
+        existing_menu: 現有菜單（可為 None 表示新店家）
+        recognized_menu: AI 辨識出的菜單
+
+    Returns:
+        {
+            "added": [...],      # 新辨識出的品項（現有菜單沒有）
+            "modified": [...],   # 名稱相同但內容不同
+            "unchanged": [...],  # 完全相同
+            "removed": [...]     # 現有菜單有但新辨識沒有的
+        }
+    """
+    def normalize_name(name: str) -> str:
+        """正規化品項名稱（去除空白、標點）以提高匹配率"""
+        import re
+        return re.sub(r'[\s\-_\(\)（）]', '', name.lower())
+
+    def items_equal(item1: dict, item2: dict) -> bool:
+        """比較兩個品項是否相同（名稱、價格、variants、promo）"""
+        if item1.get("price") != item2.get("price"):
+            return False
+        # 比較 variants
+        v1 = item1.get("variants") or []
+        v2 = item2.get("variants") or []
+        if len(v1) != len(v2):
+            return False
+        for va, vb in zip(sorted(v1, key=lambda x: x.get("name", "")),
+                         sorted(v2, key=lambda x: x.get("name", ""))):
+            if va.get("name") != vb.get("name") or va.get("price") != vb.get("price"):
+                return False
+        # 比較 promo
+        p1 = item1.get("promo")
+        p2 = item2.get("promo")
+        if p1 != p2:
+            return False
+        return True
+
+    def get_item_changes(old_item: dict, new_item: dict) -> list:
+        """取得品項的變更詳情"""
+        changes = []
+        if old_item.get("price") != new_item.get("price"):
+            changes.append(f"價格 ${old_item.get('price')} → ${new_item.get('price')}")
+        # variants 變更
+        old_variants = {v["name"]: v["price"] for v in (old_item.get("variants") or [])}
+        new_variants = {v["name"]: v["price"] for v in (new_item.get("variants") or [])}
+        if old_variants != new_variants:
+            changes.append("尺寸價格變更")
+        # promo 變更
+        if old_item.get("promo") != new_item.get("promo"):
+            old_label = (old_item.get("promo") or {}).get("label", "無")
+            new_label = (new_item.get("promo") or {}).get("label", "無")
+            changes.append(f"促銷 {old_label} → {new_label}")
+        return changes
+
+    # 建立現有品項的索引（按正規化名稱）
+    existing_items = {}
+    if existing_menu and existing_menu.get("categories"):
+        for cat in existing_menu["categories"]:
+            for item in cat.get("items", []):
+                key = normalize_name(item.get("name", ""))
+                existing_items[key] = {
+                    "item": item,
+                    "category": cat.get("name", "")
+                }
+
+    # 建立辨識品項的索引
+    recognized_items = {}
+    if recognized_menu and recognized_menu.get("categories"):
+        for cat in recognized_menu["categories"]:
+            for item in cat.get("items", []):
+                key = normalize_name(item.get("name", ""))
+                recognized_items[key] = {
+                    "item": item,
+                    "category": cat.get("name", "")
+                }
+
+    added = []
+    modified = []
+    unchanged = []
+    removed = []
+
+    # 比對辨識結果
+    for key, rec_data in recognized_items.items():
+        rec_item = rec_data["item"]
+        if key in existing_items:
+            exist_data = existing_items[key]
+            exist_item = exist_data["item"]
+            if items_equal(exist_item, rec_item):
+                unchanged.append({
+                    "item": rec_item,
+                    "category": rec_data["category"]
+                })
+            else:
+                changes = get_item_changes(exist_item, rec_item)
+                modified.append({
+                    "old_item": exist_item,
+                    "new_item": rec_item,
+                    "category": rec_data["category"],
+                    "changes": changes
+                })
+        else:
+            added.append({
+                "item": rec_item,
+                "category": rec_data["category"]
+            })
+
+    # 找出現有菜單有但辨識結果沒有的品項
+    for key, exist_data in existing_items.items():
+        if key not in recognized_items:
+            removed.append({
+                "item": exist_data["item"],
+                "category": exist_data["category"]
+            })
+
+    return {
+        "added": added,
+        "modified": modified,
+        "unchanged": unchanged,
+        "removed": removed
+    }
+
+
 async def recognize_menu_image(image_base64: str) -> dict:
     """使用 AI Vision 辨識菜單圖片
 
@@ -395,6 +520,58 @@ def execute_action(username: str, action: dict, is_manager: bool = False) -> dic
         return {"success": False, "error": str(e)}
 
 
+def calculate_promo_price(item: dict, quantity: int) -> tuple[int, int, str | None]:
+    """計算促銷價格
+
+    Args:
+        item: 菜單品項（含 promo 欄位）
+        quantity: 數量
+
+    Returns:
+        (實際金額, 折扣金額, 促銷標籤)
+    """
+    promo = item.get("promo")
+    base_price = item.get("price", 0)
+
+    if not promo:
+        return base_price * quantity, 0, None
+
+    promo_type = promo.get("type")
+    label = promo.get("label", "")
+
+    if promo_type == "buy_one_get_one":
+        # 買一送一：每兩杯收一杯錢（2杯$50=$50，3杯$50=$100）
+        actual = ((quantity + 1) // 2) * base_price
+        original = base_price * quantity
+        return actual, original - actual, label
+
+    elif promo_type == "second_discount":
+        # 第二杯折扣
+        pairs = quantity // 2
+        remainder = quantity % 2
+        second_price = promo.get("second_price")
+
+        if second_price is not None:
+            # 固定價格
+            actual = pairs * (base_price + second_price) + remainder * base_price
+        else:
+            # 折扣比例
+            ratio = promo.get("second_ratio", 1.0)
+            actual = pairs * (base_price + int(base_price * ratio)) + remainder * base_price
+
+        original = base_price * quantity
+        return actual, original - actual, label
+
+    elif promo_type == "time_limited":
+        # 限時特價：直接使用促銷價
+        promo_price = promo.get("promo_price", base_price)
+        actual = promo_price * quantity
+        original = base_price * quantity
+        return actual, original - actual, label
+
+    return base_price * quantity, 0, None
+
+
 def _create_order(username: str, action_data: dict) -> dict:
     """建立訂單"""
     today_info = data.get_today_info()
@@ -476,22 +653,36 @@ def _create_order(username: str, action_data: dict) -> dict:
 
         if menu_item:
             # 決定價格：如果有指定尺寸且菜單有 variants，查找對應價格
-            price = menu_item["price"]  # 預設價格
+            base_price = menu_item["price"]  # 預設價格
             if size and menu_item.get("variants"):
                 variant = next((v for v in menu_item["variants"] if v["name"] == size), None)
                 if variant:
-                    price = variant["price"]
+                    base_price = variant["price"]
 
-            enriched_items.append({
+            # 計算促銷價格
+            promo = menu_item.get("promo")
+            item_for_calc = {"price": base_price, "promo": promo}
+            actual_price, discount, promo_label = calculate_promo_price(item_for_calc, quantity)
+
+            enriched_item = {
                 "id": menu_item.get("id", item_id or item_name),
                 "name": menu_item["name"],
-                "price": price,
+                "price": base_price,
                 "quantity": quantity,
                 "size": size if size else None,
                 "note": note,
-                "calories": calories
-            })
-            total += price * quantity
+                "calories": calories,
+                "subtotal": actual_price
+            }
+
+            # 如果有促銷，記錄促銷資訊
+            if promo:
+                enriched_item["promo_type"] = promo.get("type")
+                enriched_item["promo_label"] = promo_label
+                enriched_item["discount"] = discount
+
+            enriched_items.append(enriched_item)
+            total += actual_price
             total_calories += calories * quantity
         else:
             not_found_items.append(item_name or item_id)

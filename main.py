@@ -304,7 +304,9 @@ async def recognize_menu(request: Request):
         return JSONResponse({"error": "請提供圖片"}, status_code=400)
 
     # 如果是新店家，先建立
+    is_new_store = False
     if not store_id and store_name:
+        is_new_store = True
         # 產生 store_id：先嘗試從英數字產生，若為空則用 hash
         ascii_id = re.sub(r'[^a-z0-9-]', '-', store_name.lower())
         ascii_id = re.sub(r'-+', '-', ascii_id).strip('-')
@@ -331,16 +333,27 @@ async def recognize_menu(request: Request):
     if not store_id:
         return JSONResponse({"error": "請選擇店家或輸入新店家名稱"}, status_code=400)
 
+    # 取得現有菜單（用於差異比對）
+    existing_menu = None if is_new_store else data.get_menu(store_id)
+
     # 呼叫 AI 辨識（非同步，不阻塞其他請求）
     result = await ai.recognize_menu_image(image_base64)
 
     if result.get("error"):
         return JSONResponse({"error": result["error"]}, status_code=500)
 
+    recognized_menu = result.get("menu")
+
+    # 進行差異比對
+    diff = ai.compare_menus(existing_menu, recognized_menu)
+
     return {
         "success": True,
         "store_id": store_id,
-        "recognized_menu": result.get("menu"),
+        "is_new_store": is_new_store,
+        "recognized_menu": recognized_menu,
+        "existing_menu": existing_menu,
+        "diff": diff,
         "warnings": result.get("warnings", [])
     }
 
@@ -361,29 +374,96 @@ async def toggle_store_active(store_id: str):
 
 @app.post("/api/save-menu")
 async def save_menu(request: Request):
-    """直接儲存菜單（管理員用）"""
+    """直接儲存菜單（管理員用）
+
+    支援兩種模式：
+    1. 完整覆蓋模式：提供 categories 直接覆蓋整個菜單
+    2. 差異模式：提供 diff_mode=True, apply_items, remove_items 進行選擇性更新
+    """
     from datetime import datetime
 
     body = await request.json()
     store_id = body.get("store_id")
     categories = body.get("categories")
+    diff_mode = body.get("diff_mode", False)
+    apply_items = body.get("apply_items", [])  # 要新增/修改的品項
+    remove_items = body.get("remove_items", [])  # 要刪除的品項 ID
 
     if not store_id:
         return JSONResponse({"error": "請指定店家"}, status_code=400)
-    if categories is None:
-        return JSONResponse({"error": "請提供菜單內容"}, status_code=400)
 
     # 確認店家存在
     store = data.get_store(store_id)
     if not store:
         return JSONResponse({"error": "找不到店家"}, status_code=404)
 
-    # 儲存菜單
-    menu = {
-        "store_id": store_id,
-        "updated_at": datetime.now().isoformat(),
-        "categories": categories
-    }
+    if diff_mode:
+        # 差異模式：基於現有菜單進行更新
+        existing_menu = data.get_menu(store_id) or {"categories": []}
+        existing_categories = existing_menu.get("categories", [])
+
+        # 建立品項索引（以 id 為 key）
+        item_map = {}
+        for cat in existing_categories:
+            for item in cat.get("items", []):
+                item_map[item.get("id")] = {"item": item, "category": cat}
+
+        # 移除指定的品項
+        for item_id in remove_items:
+            if item_id in item_map:
+                cat = item_map[item_id]["category"]
+                cat["items"] = [i for i in cat.get("items", []) if i.get("id") != item_id]
+                del item_map[item_id]
+
+        # 新增/更新品項
+        for apply_data in apply_items:
+            item = apply_data.get("item")
+            category_name = apply_data.get("category", "一般")
+
+            if not item:
+                continue
+
+            item_id = item.get("id")
+
+            if item_id and item_id in item_map:
+                # 更新現有品項
+                old_item = item_map[item_id]["item"]
+                old_item.update(item)
+            else:
+                # 新增品項：找到或建立分類
+                target_cat = None
+                for cat in existing_categories:
+                    if cat.get("name") == category_name:
+                        target_cat = cat
+                        break
+
+                if not target_cat:
+                    target_cat = {"name": category_name, "items": []}
+                    existing_categories.append(target_cat)
+
+                target_cat["items"].append(item)
+                if item_id:
+                    item_map[item_id] = {"item": item, "category": target_cat}
+
+        # 移除空的分類
+        existing_categories = [cat for cat in existing_categories if cat.get("items")]
+
+        menu = {
+            "store_id": store_id,
+            "updated_at": datetime.now().isoformat(),
+            "categories": existing_categories
+        }
+    else:
+        # 完整覆蓋模式
+        if categories is None:
+            return JSONResponse({"error": "請提供菜單內容"}, status_code=400)
+
+        menu = {
+            "store_id": store_id,
+            "updated_at": datetime.now().isoformat(),
+            "categories": categories
+        }
+
     data.save_menu(store_id, menu)
 
     return {"success": True, "menu": menu}

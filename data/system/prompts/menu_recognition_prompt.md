@@ -13,7 +13,8 @@
           "price": 數字價格,
           "variants": [{"name": "M", "price": 50}, {"name": "L", "price": 60}],
           "description": "描述（如有）",
-          "available": true
+          "available": true,
+          "promo": null
         }
       ]
     }
@@ -34,3 +35,13 @@
   - 每個 variant 包含 name（尺寸名稱）和 price（該尺寸價格）
   - price 欄位填入最小尺寸的價格作為預設
   - 如果品項只有單一價格，不需要 variants 欄位
+
+特價促銷品項（promo）：
+- 如果發現特價或促銷標示（如「買一送一」、「第二杯10元」、「第二杯半價」、「限時特價」、「優惠價」），請填入 promo 欄位
+- 將特價品項歸類至「特價優惠」分類
+- promo 格式依促銷類型：
+  - 買一送一：{"type": "buy_one_get_one", "label": "買一送一"}
+  - 第二杯固定價：{"type": "second_discount", "label": "第二杯10元", "second_price": 10}
+  - 第二杯折扣：{"type": "second_discount", "label": "第二杯半價", "second_ratio": 0.5}
+  - 限時特價：{"type": "time_limited", "label": "限時特價", "original_price": 原價, "promo_price": 特價}
+- 無促銷則 promo 為 null 或不填

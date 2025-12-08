@@ -11,12 +11,15 @@ AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
 - **快速點餐** - 點擊菜單項目直接加入訂單
 - **多店家選擇** - 當天有多家店時，可自由選擇想訂的店家
 - **訂單修改** - 可新增、移除品項或取消訂單
+- **特價優惠** - 自動套用促銷折扣（買一送一、第二杯折扣、限時特價）
 - **卡路里估算** - AI 自動估算餐點熱量
 - **個人偏好** - 記住你的稱呼和飲食偏好
 
 ### 管理員功能
 - **店家管理** - 新增、編輯、啟用/停用店家
 - **菜單辨識** - 上傳菜單圖片，AI 自動辨識並建立菜單
+- **差異預覽** - 辨識後顯示新增/修改/可刪除項目，選擇性套用變更
+- **特價辨識** - 自動識別促銷標示（買一送一、第二杯折扣、限時特價）
 - **菜單編輯** - 手動調整品項名稱、價格、尺寸變體
 - **今日設定** - 設定單一或多家今日營業店家
 - **訂單總覽** - 即時查看所有訂單與品項統計
@@ -37,7 +40,35 @@ AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
 | `/order` | 訂餐頁面 - AI 對話、菜單瀏覽、快速點餐 |
 | `/manager` | 管理頁面 - 店家管理、訂單總覽、付款追蹤 |
 
+### 今日看板
+
+![今日看板](demo/03-dashboard-summary.png)
+
+顯示今日店家、訂單列表與品項統計，方便團隊查看訂餐狀況。
+
+### 訂餐頁面
+
+![訂餐頁對話介面](demo/01-order-page-chat.png)
+
+左側為菜單、中間為 AI 對話區、右側為訂單摘要與聊天室。
+
+### 管理頁面
+
+![管理頁總覽](demo/02-manager-page-overview.png)
+
+管理員可透過對話設定店家、查看訂單、標記付款狀態。
+
+### 菜單辨識與差異預覽
+
+![差異預覽](demo/06-menu-diff-preview.png)
+
+上傳菜單圖片後，AI 自動辨識並顯示差異預覽：綠色為新增、黃色為修改、紅色為可刪除。
+
+> 完整 Demo 流程請參考 [demo/DEMO.md](demo/DEMO.md)
+
 ## 技術架構
+
+![系統架構圖](demo/system-architecture.png)
 
 | 組件 | 技術 |
 |------|------|
@@ -71,6 +102,8 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 ## 使用指南
 
 ### 一般使用者
+
+![使用者訂餐流程](demo/user-ordering-flow.png)
 
 1. 開啟訂餐頁 `/order`
 2. 輸入你的名字開始訂餐
@@ -184,8 +217,8 @@ jaba/
 |------|------|------|
 | POST | `/api/verify-admin` | 驗證管理員密碼 |
 | GET | `/api/stores/all` | 取得所有店家與菜單 |
-| POST | `/api/recognize-menu` | AI 辨識菜單圖片 |
-| POST | `/api/save-menu` | 儲存菜單 |
+| POST | `/api/recognize-menu` | AI 辨識菜單圖片（含差異比對） |
+| POST | `/api/save-menu` | 儲存菜單（支援差異模式） |
 | POST | `/api/mark-paid` | 標記已付款 |
 | POST | `/api/refund` | 標記已退款 |
 
@@ -216,6 +249,120 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 - `user_prompt.md` - 使用者對話提示詞
 - `manager_prompt.md` - 管理員對話提示詞
 - `menu_recognition_prompt.md` - 菜單辨識提示詞
+
+## AI Prompt Context 架構
+
+呷爸的 AI 對話由四個部分組成，每次對話時動態組合：
+
+![AI Prompt 組合架構圖](demo/ai-prompt-architecture.png)
+
+<details>
+<summary>文字版架構圖</summary>
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    完整 AI 訊息                          │
+├─────────────────────────────────────────────────────────┤
+│  Layer 4 (Top): 當前訊息 (Current Message)              │
+│     └─ 使用者輸入的文字                                 │
+├─────────────────────────────────────────────────────────┤
+│  Layer 3: 對話歷史 (Chat History)                       │
+│     └─ 最近 20 條對話記錄                               │
+├─────────────────────────────────────────────────────────┤
+│  Layer 2: 動態上下文 (Dynamic Context)                  │
+│     └─ JSON: 今日店家、菜單、使用者偏好、目前訂單       │
+├─────────────────────────────────────────────────────────┤
+│  Layer 1 (Base): 系統提示詞 (System Prompt)             │
+│     └─ user_prompt.md 或 manager_prompt.md              │
+└─────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │    AI Response      │
+              │  {message, actions[]}│
+              └─────────────────────┘
+```
+
+</details>
+
+### 1. 系統提示詞
+
+定義呷爸的個性、語氣、可執行動作與回應格式。
+
+| 模式 | 檔案 | 內容 |
+|------|------|------|
+| 使用者模式 | `user_prompt.md` | 訂餐助手角色、訂單操作動作 |
+| 管理員模式 | `manager_prompt.md` | 管理助手角色、店家/訂單管理動作 |
+
+### 2. 動態上下文
+
+`build_context()` 函式根據模式產生不同的上下文資料：
+
+**共用欄位：**
+```json
+{
+  "today": "2025-12-08",
+  "today_stores": [{"store_id": "coco", "store_name": "CoCo都可茶飲"}],
+  "username": "小明",
+  "preferred_name": "阿明",
+  "menus": { "coco": { "name": "CoCo都可茶飲", "menu": {...} } }
+}
+```
+
+**使用者模式額外欄位：**
+```json
+{
+  "user_profile": { "dietary_restrictions": ["不吃辣"], "allergies": [] },
+  "current_orders": [{ "order_id": "...", "items": [...], "total": 50 }]
+}
+```
+
+**管理員模式額外欄位：**
+```json
+{
+  "available_stores": [{"id": "coco", "name": "CoCo都可茶飲"}],
+  "today_summary": { "orders": [...], "grand_total": 500 },
+  "payments": { "records": [...] },
+  "recent_store_history": [{"date": "2025-12-07", "store_name": "佳香味"}]
+}
+```
+
+### 3. 對話歷史
+
+系統自動維護每位使用者的對話歷史（最多 20 條），格式：
+
+```
+使用者: 我要點珍珠奶茶
+助手: 好的，已經幫你點了珍珠奶茶 M 杯 $50，今天想喝點什麼配嗎？
+使用者: 再加一杯紅茶拿鐵
+```
+
+### 4. 完整訊息組合
+
+最終送給 AI 的訊息格式（`app/ai.py`）：
+
+```
+[系統上下文]
+{context JSON}
+
+[對話歷史]
+{formatted history}
+
+[當前訊息]
+{user message}
+
+請以 JSON 格式回應：
+{"message": "...", "actions": [...]}
+```
+
+### 相關程式碼
+
+| 函式 | 檔案 | 說明 |
+|------|------|------|
+| `get_system_prompt()` | `app/ai.py:15` | 載入系統提示詞 |
+| `build_context()` | `app/ai.py:33` | 建立動態上下文 |
+| `get_ai_chat_history()` | `app/data.py` | 取得對話歷史 |
+| `call_ai()` | `app/ai.py:128` | 組合並呼叫 AI |
 
 ## 授權
 

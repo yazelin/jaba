@@ -1,6 +1,6 @@
 {
   "store_id": "coco",
-  "updated_at": "2025-12-08T11:51:16.224779",
+  "updated_at": "2025-12-08T13:08:09.157922",
   "categories": [
     {
       "name": "無咖啡因",
@@ -637,68 +637,57 @@
       "name": "特價優惠",
       "items": [
         {
-          "id": "item-1",
+          "id": "item-5-0",
           "name": "職人咖啡全品項",
           "price": 0,
-          "description": "週二咖啡日活動",
-          "available": true,
-          "promo": {
-            "type": "buy_one_get_one",
-            "label": "買一送一（同價位買一送一）"
-          }
+          "description": "週二咖啡日，同價位買一送一",
+          "available": true
         },
         {
-          "id": "item-2",
+          "id": "item-5-1",
           "name": "小湯圓奶茶",
-          "price": 0,
+          "price": 60,
+          "description": "12/3 好友日限定，QQ可愛的紅白小湯圓搭配香濃奶茶",
+          "available": true,
           "variants": [
             {
               "name": "L",
-              "price": 50
+              "price": 60
             }
-          ],
-          "description": "QQ可愛的紅白小湯圓，搭配香濃奶茶～暖心好喝",
-          "available": true,
-          "promo": {
-            "type": "second_discount",
-            "label": "第二杯0元（12/3好友日限定）",
-            "second_price": 0
-          }
+          ]
         },
         {
-          "id": "item-4",
-          "name": "冬顏搖搖珍奶",
+          "id": "item-5-2",
+          "name": "冬顏珍珠奶",
           "price": 88,
+          "description": "12月好友禮，天天都能用",
+          "available": true,
           "variants": [
             {
               "name": "L",
               "price": 88
             }
-          ],
-          "description": "12月好友禮 - 憑券任選兩杯88元，每個人有6張券",
-          "available": true,
-          "promo": {
-            "type": "bundle_deal",
-            "label": "任選兩杯88元"
-          }
+          ]
         },
         {
-          "id": "item-3",
+          "id": "item-5-3",
           "name": "百香雙響炮",
-          "price": 0,
-          "description": "冬顏搖搖珍奶",
+          "price": 88,
+          "description": "12月好友禮，天天都能用",
           "available": true,
-          "promo": {
-            "type": "second_discount",
-            "label": "憑券任選兩杯88元",
-            "second_price": 88
-          },
           "variants": [
             {
               "name": "L",
-              "price": 0
+              "price": 88
             }
           ]
+        },
+        {
+          "id": "item-5-4",
+          "name": "百香雙響炮/冬顏雙響炮",
+          "price": 8,
+          "description": "12月都可訂限定，憑券任選第二杯8元",
+          "available": true
         }
       ]
     }

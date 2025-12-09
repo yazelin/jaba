@@ -97,8 +97,13 @@ def build_context(
             profile = data.get_user_profile(username)
 
         user_profile = None
+        preferred_name = None
         if profile:
             user_profile = profile.get("preferences", {})
+            preferred_name = user_profile.get("preferred_name")
+
+        # 決定 AI 應該使用的稱呼（優先用 preferred_name）
+        ai_display_name = preferred_name or ai_username
 
         # 格式化 session_orders，確保使用 display_name
         formatted_orders = []
@@ -112,8 +117,8 @@ def build_context(
         context = {
             "today": date.today().isoformat(),
             "today_stores": today_stores,
-            "username": ai_username,  # 當前發訊息的人的顯示名稱
-            "user_profile": user_profile,  # 當前使用者的偏好
+            "username": ai_display_name,  # AI 應該用這個名字稱呼使用者
+            "user_profile": user_profile,  # 當前使用者的偏好（飲食限制等）
             "group_ordering": True,
             "session_orders": formatted_orders,  # 群組目前的訂單
         }

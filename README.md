@@ -16,7 +16,7 @@ AI 午餐訂便當系統 - 透過 LINE 群組輕鬆訂餐
 - **自動過濾** - AI 自動辨識訂餐訊息，忽略閒聊
 - **特價優惠** - 自動套用促銷折扣（買一送一、第二杯折扣、限時特價）
 - **卡路里估算** - AI 自動估算餐點熱量
-- **個人偏好** - 透過對話記住你的稱呼和飲食偏好（如「我不吃辣」）
+- **個人偏好** - 透過 1對1 聊天記住你的稱呼和飲食偏好（如「我不吃辣」），群組點餐時自動套用
 
 ### 超級管理員功能
 - **群組管理** - 管理多個 LINE 群組的訂單
@@ -261,6 +261,7 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 編輯 `data/system/prompts/` 目錄下的檔案：
 - `manager_prompt.md` - 管理員對話提示詞
 - `group_ordering_prompt.md` - LINE 群組點餐提示詞
+- `personal_prompt.md` - 個人偏好設定提示詞（1對1 聊天）
 - `menu_recognition_prompt.md` - 菜單辨識提示詞
 
 ## AI Prompt Context 架構
@@ -305,6 +306,7 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 | 模式 | 檔案 | 內容 |
 |------|------|------|
 | 群組點餐模式 | `group_ordering_prompt.md` | LINE 群組訂餐助手角色、訂單操作動作 |
+| 個人偏好模式 | `personal_prompt.md` | 1對1 聊天偏好設定、不可點餐 |
 | 管理員模式 | `manager_prompt.md` | 管理助手角色、店家/訂單管理動作 |
 
 ### 2. 動態上下文
@@ -378,9 +380,9 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 | 函式 | 檔案 | 說明 |
 |------|------|------|
 | `get_system_prompt()` | `app/ai.py:15` | 載入系統提示詞 |
-| `build_context()` | `app/ai.py:33` | 建立動態上下文 |
-| `get_ai_chat_history()` | `app/data.py` | 取得對話歷史 |
-| `call_ai()` | `app/ai.py:128` | 組合並呼叫 AI |
+| `build_context()` | `app/ai.py:40` | 建立動態上下文 |
+| `get_ai_chat_history()` | `app/data.py:654` | 取得對話歷史 |
+| `call_ai()` | `app/ai.py:240` | 組合並呼叫 AI |
 
 ## 授權
 

@@ -1039,6 +1039,17 @@ async def linebot_unregister(request: Request):
     whitelist["groups"] = [g for g in whitelist["groups"] if g["id"] != id_value]
 
     save_linebot_whitelist(whitelist)
+
+    # 清除相關資料
+    sessions_dir = data.DATA_DIR / "linebot" / "sessions"
+    session_file = sessions_dir / f"{id_value}.json"
+    chat_file = sessions_dir / f"{id_value}-chat.json"
+
+    if session_file.exists():
+        session_file.unlink()
+    if chat_file.exists():
+        chat_file.unlink()
+
     return {"success": True, "message": "已取消註冊"}
 
 

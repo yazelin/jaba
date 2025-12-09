@@ -32,6 +32,12 @@ AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
 - **團體聊天** - 內建即時聊天室方便同事溝通
 - **Session 管理** - 每日對話紀錄自動管理
 
+### LINE Bot 群組點餐
+- **群組點餐 Session** - 群組專屬點餐流程，訂單獨立於個人訂單
+- **共享對話歷史** - AI 可理解跟單（+1）等上下文
+- **飲料縮寫辨識** - 支援「微微」「少少」「半半」等常見點法
+- **自動過濾** - AI 自動辨識訂餐訊息，忽略閒聊
+
 ## 系統畫面
 
 | 頁面 | 說明 |
@@ -222,6 +228,15 @@ jaba/
 | POST | `/api/mark-paid` | 標記已付款 |
 | POST | `/api/refund` | 標記已退款 |
 
+### LINE Bot API
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| POST | `/api/linebot/register` | 註冊白名單（啟用點餐功能） |
+| DELETE | `/api/linebot/unregister` | 取消註冊（清除相關資料） |
+| GET | `/api/linebot/check` | 檢查是否已啟用 |
+| GET | `/api/linebot/session/{group_id}` | 檢查群組是否在點餐中 |
+
 ### Socket.IO 事件
 
 | 事件 | 說明 |
@@ -246,8 +261,9 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 ### 自訂 AI 提示詞
 
 編輯 `data/system/prompts/` 目錄下的檔案：
-- `user_prompt.md` - 使用者對話提示詞
+- `user_prompt.md` - 使用者對話提示詞（個人點餐）
 - `manager_prompt.md` - 管理員對話提示詞
+- `group_ordering_prompt.md` - 群組點餐提示詞
 - `menu_recognition_prompt.md` - 菜單辨識提示詞
 
 ## AI Prompt Context 架構

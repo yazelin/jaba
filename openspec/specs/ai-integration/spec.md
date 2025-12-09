@@ -11,42 +11,16 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **THEN** 後端執行 `claude -p` 命令並解析 JSON 回應
 
 ### Requirement: Session 管理
-系統 SHALL 在使用者每次進入對話頁面時重置 session，並在同一次訪問內維持對話延續。
+系統 SHALL 在管理員進入對話頁面時重置 session，並在同一次訪問內維持對話延續。LINE Bot 群組模式使用群組 session 而非個人 session。
 
-#### Scenario: 進入訂購頁重置 session
-- **GIVEN** 使用者輸入名字點擊「開始訂餐」
-- **WHEN** 前端執行 `startChat()`
-- **THEN** 先呼叫 `/api/session/reset` 清除舊 session
-- **AND** 後續對話會建立新的 session
+#### Scenario: 進入訂購頁重置 session（移除）
+原因：訂餐頁已移除。
 
-#### Scenario: 進入管理頁重置 session
-- **GIVEN** 管理員進入管理頁面
-- **WHEN** 頁面初始化
-- **THEN** 呼叫 `/api/session/reset`（is_manager=true）清除舊 session
-- **AND** 後續對話會建立新的 session
-
-#### Scenario: 同一次訪問內延續對話
-- **GIVEN** 使用者已開始對話且尚未離開頁面
-- **WHEN** 使用者繼續發送訊息
-- **THEN** 使用 `--resume` 延續同一個 session
-- **AND** AI 能理解對話上下文（如確認型回應「好」、「對」）
-
-#### Scenario: 重新進入頁面
-- **GIVEN** 使用者重新整理頁面或重新進入
-- **WHEN** 再次執行 `startChat()` 或管理頁初始化
+#### Scenario: 重新進入頁面（修改）
+- **GIVEN** 管理員重新整理頁面或重新進入
+- **WHEN** 再次執行管理頁初始化
 - **THEN** 重置 session，開始全新對話
 - **AND** 呷爸不會混淆先前訪問的對話內容
-
-### Requirement: 前端名稱暫存
-系統 SHALL 在前端使用 localStorage 儲存使用者名稱，下次自動填入。
-
-#### Scenario: 記住使用者名稱
-- **WHEN** 使用者輸入名稱並開始對話
-- **THEN** 將名稱存入 localStorage
-
-#### Scenario: 自動填入名稱
-- **WHEN** 使用者再次開啟頁面
-- **THEN** 自動填入上次使用的名稱
 
 ### Requirement: AI 動作執行
 系統 SHALL 統一使用 `actions` 陣列格式處理 AI 回應的動作。
@@ -86,24 +60,13 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **AND** 執行之前提議的動作
 
 ### Requirement: 歡迎訊息流程
-系統 SHALL 使用靜態歡迎訊息讓使用者立即看到回應，歡迎詞風格活潑親切。
+系統 SHALL 使用靜態歡迎訊息讓管理員立即看到回應，歡迎詞風格活潑親切。LINE 使用者歡迎訊息由 LINE Bot 處理。
 
-#### Scenario: 管理員靜態歡迎訊息
-- **GIVEN** 管理員成功登入
-- **WHEN** 進入管理模式
-- **THEN** 立即顯示靜態歡迎訊息
-- **AND** 訊息包含操作教學（設定店家、查看訂單等）
-- **AND** 訊息包含提示「需要店家建議可以問我」
+#### Scenario: 一般使用者靜態歡迎訊息（移除）
+原因：訂餐頁已移除，LINE 使用者歡迎訊息由 LINE Bot 回覆處理。
 
-#### Scenario: 一般使用者靜態歡迎訊息
-- **GIVEN** 使用者輸入名字開始訂餐
-- **WHEN** 進入訂餐模式
-- **THEN** 立即顯示靜態歡迎訊息：「嗨！哇係呷爸，今天想吃什麼呢？」
-- **AND** 訊息包含今日店家資訊
-- **AND** 訊息包含提示「不知道吃什麼？可以問我建議」
-
-#### Scenario: 使用者主動詢問建議
-- **GIVEN** 使用者已進入系統
+#### Scenario: 使用者主動詢問建議（修改）
+- **GIVEN** LINE 群組使用者已加入點餐
 - **WHEN** 使用者詢問「今天吃什麼好」或類似問題
 - **THEN** AI 根據 prompt 中的建議邏輯回應
 - **AND** 參考使用者 profile 中的偏好進行個人化推薦

@@ -71,14 +71,29 @@
           </div>
         </div>
 
-        <!-- 訂單總覽面板 -->
+        <!-- 群組選擇器 -->
+        <div class="panel-card group-selector-panel">
+          <div class="panel-header">
+            <span>👥</span>
+            <span>群組訂單管理</span>
+          </div>
+          <div class="panel-content">
+            <select id="group-selector" onchange="loadGroupOrders()">
+              <option value="">-- 選擇群組 --</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="refreshGroups()" title="重新整理">🔄</button>
+          </div>
+        </div>
+
+        <!-- 群組訂單列表面板 -->
         <div class="panel-card orders-panel">
           <div class="panel-header">
             <span>📦</span>
-            <span>今日訂單</span>
+            <span>群組訂單</span>
+            <button class="btn btn-sm btn-primary" id="proxy-order-btn" onclick="openProxyOrder()" style="display: none;">+ 代理點餐</button>
           </div>
           <div class="panel-content" id="orders-content">
-            <div class="orders-empty">目前還沒有訂單</div>
+            <div class="orders-empty">請選擇群組</div>
           </div>
         </div>
 
@@ -89,7 +104,18 @@
             <span>付款狀態</span>
           </div>
           <div class="panel-content" id="payments-content">
-            <div class="orders-empty">無付款資料</div>
+            <div class="orders-empty">請選擇群組</div>
+          </div>
+        </div>
+
+        <!-- 訂單統計面板 -->
+        <div class="panel-card stats-panel">
+          <div class="panel-header">
+            <span>📊</span>
+            <span>訂單統計</span>
+          </div>
+          <div class="panel-content" id="stats-content">
+            <div class="orders-empty">請選擇群組</div>
           </div>
         </div>
       </div>
@@ -158,6 +184,67 @@
     </div>
   </div>
 
+  <!-- 代理點餐對話框 -->
+  <div class="modal-overlay" id="proxy-order-modal" style="display: none;">
+    <div class="modal-content proxy-order-modal">
+      <div class="modal-header">
+        <h3>📝 代理點餐</h3>
+        <button class="modal-close" onclick="closeProxyOrder()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="proxy-order-form">
+          <div class="form-group">
+            <label>使用者：</label>
+            <select id="proxy-user-select">
+              <option value="">-- 選擇使用者 --</option>
+              <option value="__new__">+ 新增使用者</option>
+            </select>
+            <input type="text" id="new-user-name" placeholder="輸入新使用者名稱" style="display: none;">
+          </div>
+          <div class="form-group">
+            <label>餐點：</label>
+            <select id="proxy-item-select">
+              <option value="">-- 選擇餐點 --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>數量：</label>
+            <input type="number" id="proxy-quantity" value="1" min="1" max="10">
+          </div>
+          <div class="form-group">
+            <label>備註：</label>
+            <input type="text" id="proxy-note" placeholder="例：不要酸菜、無糖去冰">
+          </div>
+        </div>
+        <div class="proxy-order-actions">
+          <button class="btn btn-secondary" onclick="closeProxyOrder()">取消</button>
+          <button class="btn btn-primary" onclick="submitProxyOrder()">確認點餐</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編輯訂單對話框 -->
+  <div class="modal-overlay" id="edit-order-modal" style="display: none;">
+    <div class="modal-content edit-order-modal">
+      <div class="modal-header">
+        <h3>✏️ 編輯訂單</h3>
+        <button class="modal-close" onclick="closeEditOrder()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="edit-order-user" id="edit-order-user"></div>
+        <div class="edit-order-items" id="edit-order-items">
+          <!-- 動態生成 -->
+        </div>
+        <div class="edit-order-actions">
+          <button class="btn btn-danger" onclick="deleteEntireOrder()">刪除整筆訂單</button>
+          <button class="btn btn-secondary" onclick="closeEditOrder()">取消</button>
+          <button class="btn btn-primary" onclick="saveEditedOrder()">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 確認對話框 -->
   <div class="modal-overlay" id="confirm-modal" style="display: none;">
     <div class="modal-content confirm-modal">
@@ -198,6 +285,12 @@
     let todayPayments = null;
     let todayStores = [];  // 多店家資料
     let allStores = [];    // 所有店家資料（含菜單）
+
+    // 群組訂單管理
+    let allGroups = [];           // 所有群組列表
+    let selectedGroupId = null;   // 當前選擇的群組
+    let currentGroupOrders = null; // 當前群組的訂單資料
+    let editingUserId = null;     // 正在編輯的使用者 ID
 
     // === 瀏覽器通知 ===
     function requestNotificationPermission() {
@@ -529,6 +622,490 @@
       content.innerHTML = html;
     }
 
+    // === 群組訂單管理 ===
+    async function loadGroups() {
+      try {
+        const res = await fetch('/api/super-admin/groups');
+        const data = await res.json();
+        allGroups = data.groups || [];
+        updateGroupSelector();
+      } catch (err) {
+        console.error('載入群組失敗:', err);
+      }
+    }
+
+    function refreshGroups() {
+      loadGroups();
+      if (selectedGroupId) {
+        loadGroupOrders();
+      }
+      showNotification('已重新整理');
+    }
+
+    function updateGroupSelector() {
+      const select = document.getElementById('group-selector');
+      let html = '<option value="">-- 選擇群組 --</option>';
+
+      allGroups.forEach(group => {
+        const selected = group.id === selectedGroupId ? 'selected' : '';
+        html += `<option value="${group.id}" ${selected}>${group.name} (${group.member_count}人)</option>`;
+      });
+
+      if (allGroups.length === 0) {
+        html = '<option value="">尚無已啟用的群組</option>';
+      }
+
+      select.innerHTML = html;
+    }
+
+    async function loadGroupOrders() {
+      const groupId = document.getElementById('group-selector').value;
+      selectedGroupId = groupId;
+
+      if (!groupId) {
+        document.getElementById('orders-content').innerHTML = '<div class="orders-empty">請選擇群組</div>';
+        document.getElementById('payments-content').innerHTML = '<div class="orders-empty">請選擇群組</div>';
+        document.getElementById('stats-content').innerHTML = '<div class="orders-empty">請選擇群組</div>';
+        document.getElementById('proxy-order-btn').style.display = 'none';
+        currentGroupOrders = null;
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${groupId}/orders`);
+        const data = await res.json();
+        currentGroupOrders = data;
+
+        updateGroupOrdersPanel(data);
+        updateGroupPaymentsPanel(data);
+        updateGroupStatsPanel(data);
+
+        // 顯示代理點餐按鈕（僅在點餐進行中）
+        document.getElementById('proxy-order-btn').style.display =
+          data.status === 'ordering' ? 'inline-block' : 'none';
+
+      } catch (err) {
+        console.error('載入群組訂單失敗:', err);
+        document.getElementById('orders-content').innerHTML = '<div class="orders-empty">載入失敗</div>';
+      }
+    }
+
+    function updateGroupOrdersPanel(data) {
+      const content = document.getElementById('orders-content');
+      const orders = data.orders || [];
+
+      if (orders.length === 0) {
+        content.innerHTML = '<div class="orders-empty">該群組尚無訂單</div>';
+        return;
+      }
+
+      let html = '';
+      orders.forEach(order => {
+        const displayName = order.display_name || '未知';
+        const itemsHtml = order.items.map(item => {
+          let text = item.quantity > 1 ? `${item.name} x${item.quantity}` : item.name;
+          if (item.note) text += ` (${item.note})`;
+          return `<div class="order-item-line">${text} $${item.subtotal || item.price * item.quantity}</div>`;
+        }).join('');
+
+        html += `
+          <div class="group-order-item">
+            <div class="group-order-header">
+              <span class="group-order-user">👤 ${displayName}</span>
+              <span class="group-order-total">$${order.total}</span>
+              <button class="btn-icon btn-edit" onclick="openEditOrder('${order.line_user_id}', '${displayName}')" title="編輯">✏️</button>
+            </div>
+            <div class="group-order-items">${itemsHtml}</div>
+          </div>
+        `;
+      });
+
+      content.innerHTML = html;
+    }
+
+    function updateGroupPaymentsPanel(data) {
+      const content = document.getElementById('payments-content');
+      const payments = data.payments || {};
+      const paymentEntries = Object.entries(payments);
+
+      if (paymentEntries.length === 0) {
+        content.innerHTML = '<div class="orders-empty">無付款資料</div>';
+        return;
+      }
+
+      let html = '';
+      paymentEntries.forEach(([userId, payment]) => {
+        const displayName = payment.display_name || '未知';
+        const amount = payment.amount || 0;
+        const paidAmount = payment.paid_amount || 0;
+
+        // 判斷付款狀態
+        let statusText, statusClass;
+        let showPaidBtn = false;
+        let showRefundBtn = false;
+
+        if (!payment.paid && paidAmount > 0) {
+          statusText = `待補 $${amount - paidAmount}`;
+          statusClass = 'partial';
+          showPaidBtn = true;
+        } else if (payment.note && payment.note.startsWith('待退')) {
+          statusText = payment.note;
+          statusClass = 'refund';
+          showRefundBtn = true;
+        } else if (payment.paid) {
+          statusText = '已付';
+          statusClass = 'paid';
+        } else {
+          statusText = '未付';
+          statusClass = 'pending';
+          showPaidBtn = true;
+        }
+
+        html += `
+          <div class="payment-item ${payment.paid ? 'paid' : ''}">
+            <div>
+              <span class="payment-user">${displayName}</span>
+              <span class="payment-amount">$${amount}</span>
+            </div>
+            <div class="payment-actions">
+              ${showPaidBtn ? `<button class="btn-paid" onclick="markGroupPaid('${userId}')">確認付款</button>` : ''}
+              ${showRefundBtn ? `<button class="btn-refund" onclick="markGroupRefund('${userId}')">確認退款</button>` : ''}
+              <span class="payment-status ${statusClass}">${statusText}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      content.innerHTML = html;
+    }
+
+    function updateGroupStatsPanel(data) {
+      const content = document.getElementById('stats-content');
+      const summary = data.summary || {};
+
+      // 品項統計
+      const itemCounts = {};
+      (data.orders || []).forEach(order => {
+        (order.items || []).forEach(item => {
+          const key = item.note ? `${item.name}（${item.note}）` : item.name;
+          itemCounts[key] = (itemCounts[key] || 0) + (item.quantity || 1);
+        });
+      });
+
+      let html = `
+        <div class="stats-overview">
+          <div class="stat-item">
+            <span class="stat-label">訂單數</span>
+            <span class="stat-value">${summary.order_count || 0}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">總金額</span>
+            <span class="stat-value">$${summary.total_amount || 0}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">已收</span>
+            <span class="stat-value stats-collected">$${summary.paid_amount || 0}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">待收</span>
+            <span class="stat-value stats-pending">$${summary.pending_amount || 0}</span>
+          </div>
+        </div>
+      `;
+
+      if (Object.keys(itemCounts).length > 0) {
+        html += '<div class="stats-items-title">📦 品項統計</div>';
+        html += '<div class="stats-items">';
+        Object.entries(itemCounts)
+          .sort((a, b) => b[1] - a[1])
+          .forEach(([name, count]) => {
+            html += `<div class="stats-item-row"><span>${name}</span><span>x${count}</span></div>`;
+          });
+        html += '</div>';
+      }
+
+      content.innerHTML = html;
+    }
+
+    // 群組付款操作
+    async function markGroupPaid(userId) {
+      if (!selectedGroupId) return;
+
+      const confirmed = await showConfirmModal('確定要標記此使用者已付款嗎？', '💵');
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/payments/${userId}/mark-paid`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showNotification('已確認付款');
+          loadGroupOrders();
+        } else {
+          showNotification('操作失敗：' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        console.error('標記付款失敗:', err);
+        showNotification('操作失敗');
+      }
+    }
+
+    async function markGroupRefund(userId) {
+      if (!selectedGroupId) return;
+
+      const confirmed = await showConfirmModal('確定要標記已退款嗎？', '💸');
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/payments/${userId}/refund`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showNotification('已確認退款');
+          loadGroupOrders();
+        } else {
+          showNotification('操作失敗：' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        console.error('標記退款失敗:', err);
+        showNotification('操作失敗');
+      }
+    }
+
+    // === 代理點餐 ===
+    function openProxyOrder() {
+      if (!selectedGroupId || !currentGroupOrders) return;
+
+      // 填充使用者下拉選單（從現有訂單中取得）
+      const userSelect = document.getElementById('proxy-user-select');
+      let userHtml = '<option value="">-- 選擇使用者 --</option>';
+      userHtml += '<option value="__new__">+ 新增使用者</option>';
+
+      const seenUsers = new Set();
+      (currentGroupOrders.orders || []).forEach(order => {
+        if (!seenUsers.has(order.line_user_id)) {
+          seenUsers.add(order.line_user_id);
+          userHtml += `<option value="${order.line_user_id}" data-name="${order.display_name}">${order.display_name}</option>`;
+        }
+      });
+      userSelect.innerHTML = userHtml;
+
+      // 填充餐點下拉選單
+      updateProxyItemSelect();
+
+      document.getElementById('proxy-order-modal').style.display = 'flex';
+    }
+
+    function closeProxyOrder() {
+      document.getElementById('proxy-order-modal').style.display = 'none';
+      document.getElementById('new-user-name').style.display = 'none';
+      document.getElementById('new-user-name').value = '';
+      document.getElementById('proxy-quantity').value = '1';
+      document.getElementById('proxy-note').value = '';
+    }
+
+    function updateProxyItemSelect() {
+      const select = document.getElementById('proxy-item-select');
+      let html = '<option value="">-- 選擇餐點 --</option>';
+
+      // 從今日店家菜單取得品項
+      todayStores.forEach(storeData => {
+        const store = storeData.store;
+        const menu = storeData.menu;
+
+        if (menu && menu.categories) {
+          menu.categories.forEach(cat => {
+            (cat.items || []).forEach(item => {
+              const price = item.price || 0;
+              html += `<option value="${item.name}" data-price="${price}">${item.name} $${price}</option>`;
+            });
+          });
+        }
+      });
+
+      select.innerHTML = html;
+    }
+
+    // 處理使用者選擇變更
+    document.getElementById('proxy-user-select').addEventListener('change', (e) => {
+      const newUserInput = document.getElementById('new-user-name');
+      if (e.target.value === '__new__') {
+        newUserInput.style.display = 'block';
+      } else {
+        newUserInput.style.display = 'none';
+      }
+    });
+
+    async function submitProxyOrder() {
+      const userSelect = document.getElementById('proxy-user-select');
+      const itemSelect = document.getElementById('proxy-item-select');
+      const quantity = parseInt(document.getElementById('proxy-quantity').value) || 1;
+      const note = document.getElementById('proxy-note').value.trim();
+
+      // 取得使用者資訊
+      let lineUserId = userSelect.value;
+      let displayName = '';
+
+      if (lineUserId === '__new__') {
+        displayName = document.getElementById('new-user-name').value.trim();
+        if (!displayName) {
+          alert('請輸入使用者名稱');
+          return;
+        }
+        // 新使用者：生成一個臨時 ID
+        lineUserId = 'proxy_' + Date.now();
+      } else if (!lineUserId) {
+        alert('請選擇使用者');
+        return;
+      } else {
+        displayName = userSelect.options[userSelect.selectedIndex].dataset.name || '';
+      }
+
+      // 取得餐點
+      const itemName = itemSelect.value;
+      if (!itemName) {
+        alert('請選擇餐點');
+        return;
+      }
+
+      // 呼叫 API
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            line_user_id: lineUserId,
+            display_name: displayName,
+            items: [{ name: itemName, quantity: quantity, note: note }]
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          closeProxyOrder();
+          loadGroupOrders();
+          showNotification('代理點餐成功');
+        } else {
+          alert('點餐失敗：' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        console.error('代理點餐失敗:', err);
+        alert('點餐失敗');
+      }
+    }
+
+    // === 編輯訂單 ===
+    function openEditOrder(userId, displayName) {
+      if (!selectedGroupId || !currentGroupOrders) return;
+
+      editingUserId = userId;
+
+      // 找到該使用者的訂單
+      const userOrder = currentGroupOrders.orders.find(o => o.line_user_id === userId);
+      if (!userOrder) {
+        alert('找不到訂單');
+        return;
+      }
+
+      document.getElementById('edit-order-user').textContent = `👤 ${displayName}`;
+
+      // 顯示品項
+      let html = '';
+      userOrder.items.forEach((item, idx) => {
+        html += `
+          <div class="edit-item-row" data-idx="${idx}">
+            <span class="edit-item-name">${item.name}</span>
+            <input type="number" class="edit-item-qty" value="${item.quantity || 1}" min="1" max="10">
+            <span class="edit-item-price">$${item.price || 0}</span>
+            <button class="btn-icon btn-danger" onclick="removeEditItem(${idx})">🗑️</button>
+          </div>
+        `;
+      });
+
+      document.getElementById('edit-order-items').innerHTML = html;
+      document.getElementById('edit-order-modal').style.display = 'flex';
+    }
+
+    function closeEditOrder() {
+      document.getElementById('edit-order-modal').style.display = 'none';
+      editingUserId = null;
+    }
+
+    function removeEditItem(idx) {
+      const row = document.querySelector(`.edit-item-row[data-idx="${idx}"]`);
+      if (row) row.remove();
+    }
+
+    async function saveEditedOrder() {
+      if (!selectedGroupId || !editingUserId) return;
+
+      // 收集編輯後的品項
+      const items = [];
+      document.querySelectorAll('.edit-item-row').forEach(row => {
+        const name = row.querySelector('.edit-item-name').textContent;
+        const quantity = parseInt(row.querySelector('.edit-item-qty').value) || 1;
+        items.push({ name, quantity });
+      });
+
+      if (items.length === 0) {
+        // 沒有品項，等於刪除訂單
+        await deleteEntireOrder();
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/orders/${editingUserId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          closeEditOrder();
+          loadGroupOrders();
+          showNotification('訂單已更新');
+        } else {
+          alert('更新失敗：' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        console.error('更新訂單失敗:', err);
+        alert('更新失敗');
+      }
+    }
+
+    async function deleteEntireOrder() {
+      if (!selectedGroupId || !editingUserId) return;
+
+      const confirmed = await showConfirmModal('確定要刪除整筆訂單嗎？', '🗑️');
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/orders/${editingUserId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          closeEditOrder();
+          loadGroupOrders();
+          showNotification('訂單已刪除');
+        } else {
+          alert('刪除失敗：' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        console.error('刪除訂單失敗:', err);
+        alert('刪除失敗');
+      }
+    }
+
     function toggleStoreMenu(menuId) {
       const menuEl = document.getElementById(menuId);
       const index = menuId.replace('store-menu-', '');
@@ -609,6 +1186,7 @@
           // 載入管理資料並取得偏好稱呼
           const preferredName = await loadAdminData(username);
           loadAllStores();
+          loadGroups();  // 載入群組列表
 
           // 顯示歡迎訊息（使用偏好稱呼）
           const displayName = preferredName || '我們';

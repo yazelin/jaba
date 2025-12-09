@@ -213,12 +213,60 @@ def save_menu(store_id: str, menu: dict) -> None:
 # === 使用者管理 ===
 
 def get_user(username: str) -> dict | None:
-    """取得使用者資訊"""
+    """取得使用者資訊（舊版，以 username 為 key）
+
+    注意：此函數為向後相容保留，新程式碼應使用 get_user_by_line_id()
+    """
     return read_json(DATA_DIR / "users" / username / "profile.json")
 
 
+def get_user_by_line_id(line_user_id: str) -> dict | None:
+    """以 LINE User ID 取得使用者資訊
+
+    Args:
+        line_user_id: LINE User ID (格式如 Uxxxxxxxxx)
+
+    Returns:
+        使用者 profile 或 None
+    """
+    return read_json(DATA_DIR / "users" / line_user_id / "profile.json")
+
+
+def create_user(line_user_id: str, display_name: str) -> dict:
+    """建立新使用者
+
+    Args:
+        line_user_id: LINE User ID (格式如 Uxxxxxxxxx)
+        display_name: LINE 顯示名稱
+
+    Returns:
+        新建立的 profile
+    """
+    user_dir = DATA_DIR / "users" / line_user_id
+    user_dir.mkdir(parents=True, exist_ok=True)
+    (user_dir / "orders").mkdir(exist_ok=True)
+    (user_dir / "sessions").mkdir(exist_ok=True)
+
+    profile = {
+        "line_user_id": line_user_id,
+        "display_name": display_name,
+        "created_at": datetime.now().isoformat(),
+        "preferences": {
+            "dietary_restrictions": [],
+            "allergies": [],
+            "drink_preferences": [],
+            "notes": ""
+        }
+    }
+    write_json(user_dir / "profile.json", profile)
+    return profile
+
+
 def ensure_user(username: str) -> dict:
-    """確保使用者存在，不存在則建立"""
+    """確保使用者存在，不存在則建立（舊版，以 username 為 key）
+
+    注意：此函數為向後相容保留，新程式碼應使用 ensure_user_by_line_id()
+    """
     user = get_user(username)
     if user:
         return user
@@ -237,26 +285,56 @@ def ensure_user(username: str) -> dict:
     return profile
 
 
+def ensure_user_by_line_id(line_user_id: str, display_name: str) -> dict:
+    """確保使用者存在，不存在則建立
+
+    Args:
+        line_user_id: LINE User ID (格式如 Uxxxxxxxxx)
+        display_name: LINE 顯示名稱
+
+    Returns:
+        既有或新建立的 profile
+    """
+    user = get_user_by_line_id(line_user_id)
+    if user:
+        # 更新 display_name（使用者可能改名）
+        if user.get("display_name") != display_name:
+            user["display_name"] = display_name
+            write_json(DATA_DIR / "users" / line_user_id / "profile.json", user)
+        return user
+
+    return create_user(line_user_id, display_name)
+
+
 def get_users() -> list[dict]:
     """取得所有使用者列表"""
     users = []
-    for username in list_dirs(DATA_DIR / "users"):
-        user = get_user(username)
+    for user_id in list_dirs(DATA_DIR / "users"):
+        # 優先嘗試新格式（line_user_id）
+        user = get_user_by_line_id(user_id)
+        if not user:
+            user = get_user(user_id)
         if user:
             users.append(user)
     return users
 
 
 def get_user_profile(username: str) -> dict | None:
-    """取得使用者 profile（包含偏好設定）"""
+    """取得使用者 profile（包含偏好設定）
+
+    注意：此函數同時支援 line_user_id 和舊版 username 查詢
+    """
     return read_json(DATA_DIR / "users" / username / "profile.json")
 
 
 def update_user_profile(username: str, updates: dict) -> dict:
-    """更新使用者 profile 的偏好設定"""
+    """更新使用者 profile 的偏好設定
+
+    注意：此函數同時支援 line_user_id 和舊版 username 作為 key
+    """
     profile = get_user_profile(username)
     if not profile:
-        # 使用者不存在，先建立
+        # 使用者不存在，先建立（舊版行為）
         profile = ensure_user(username)
 
     # 確保 preferences 欄位存在
@@ -265,11 +343,39 @@ def update_user_profile(username: str, updates: dict) -> dict:
 
     # 更新 preferences 中的欄位
     for key, value in updates.items():
-        if key in ["preferred_name", "dietary_restrictions", "allergies", "notes"]:
+        if key in ["preferred_name", "dietary_restrictions", "allergies", "drink_preferences", "notes"]:
             profile["preferences"][key] = value
 
     # 儲存更新後的 profile
     write_json(DATA_DIR / "users" / username / "profile.json", profile)
+    return profile
+
+
+def update_user_profile_by_line_id(line_user_id: str, updates: dict) -> dict:
+    """更新使用者 profile 的偏好設定（以 LINE User ID 為 key）
+
+    Args:
+        line_user_id: LINE User ID
+        updates: 要更新的偏好設定
+
+    Returns:
+        更新後的 profile
+    """
+    profile = get_user_by_line_id(line_user_id)
+    if not profile:
+        raise ValueError(f"使用者不存在: {line_user_id}")
+
+    # 確保 preferences 欄位存在
+    if "preferences" not in profile:
+        profile["preferences"] = {}
+
+    # 更新 preferences 中的欄位
+    for key, value in updates.items():
+        if key in ["dietary_restrictions", "allergies", "drink_preferences", "notes"]:
+            profile["preferences"][key] = value
+
+    # 儲存更新後的 profile
+    write_json(DATA_DIR / "users" / line_user_id / "profile.json", profile)
     return profile
 
 

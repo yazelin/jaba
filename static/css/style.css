@@ -2372,3 +2372,234 @@ body::before {
 .btn-link:hover {
   color: #0d47a1;
 }
+
+/* === 群組訂單管理 === */
+
+/* 群組選擇器 */
+.group-selector-panel .panel-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.group-selector-panel select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95em;
+}
+
+.group-selector-panel .btn-sm {
+  padding: 8px 12px;
+  font-size: 0.9em;
+  border-radius: 8px;
+}
+
+/* 群組訂單項目 */
+.group-order-item {
+  background: #fff8e1;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #ffe082;
+}
+
+.group-order-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.group-order-user {
+  font-weight: 600;
+  color: #5d4037;
+  flex: 1;
+}
+
+.group-order-total {
+  font-weight: 700;
+  color: #e65100;
+}
+
+.group-order-items {
+  padding-left: 24px;
+  font-size: 0.9em;
+  color: #6d4c41;
+}
+
+.order-item-line {
+  padding: 2px 0;
+}
+
+.btn-edit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+  padding: 4px;
+  opacity: 0.6;
+}
+
+.btn-edit:hover {
+  opacity: 1;
+}
+
+/* 統計面板 */
+.stats-overview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.stat-item {
+  background: #f5f5f5;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.8em;
+  color: #757575;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.2em;
+  font-weight: 700;
+  color: #333;
+}
+
+.stats-collected {
+  color: #388e3c !important;
+}
+
+.stats-pending {
+  color: #f57c00 !important;
+}
+
+.stats-items-title {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #5d4037;
+  margin: 10px 0 8px;
+}
+
+.stats-items {
+  font-size: 0.85em;
+}
+
+.stats-item-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px dotted #e0e0e0;
+}
+
+/* 代理點餐對話框 */
+.proxy-order-modal {
+  max-width: 400px;
+}
+
+.proxy-order-form .form-group {
+  margin-bottom: 15px;
+}
+
+.proxy-order-form label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #5d4037;
+}
+
+.proxy-order-form select,
+.proxy-order-form input[type="text"],
+.proxy-order-form input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95em;
+}
+
+.proxy-order-form input[type="number"] {
+  width: 80px;
+}
+
+.proxy-order-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* 編輯訂單對話框 */
+.edit-order-modal {
+  max-width: 450px;
+}
+
+.edit-order-user {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #5d4037;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.edit-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.edit-item-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.edit-item-qty {
+  width: 60px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.edit-item-price {
+  color: #e65100;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: right;
+}
+
+.edit-order-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.edit-order-actions .btn-danger {
+  margin-right: auto;
+}
+
+/* 小按鈕 */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.85em;
+}
+
+/* 代理點餐按鈕放在標題旁 */
+.panel-header .btn-sm {
+  margin-left: auto;
+}

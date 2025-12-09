@@ -42,27 +42,56 @@ def build_context(
     is_manager: bool = False,
     group_ordering: bool = False,
     group_id: str | None = None,
-    session_orders: list | None = None
+    session_orders: list | None = None,
+    line_user_id: str | None = None,
+    display_name: str | None = None
 ) -> dict:
-    """建立 AI 上下文"""
+    """建立 AI 上下文
+
+    Args:
+        username: 使用者名稱（舊版相容，個人模式用）
+        is_manager: 是否為管理員模式
+        group_ordering: 是否為群組點餐模式
+        group_id: 群組 ID
+        session_orders: 群組訂單列表
+        line_user_id: LINE User ID（群組點餐時用於查詢使用者 profile）
+        display_name: LINE 顯示名稱（群組點餐時作為 username 傳給 AI）
+    """
     today_info = data.get_today_info()
     today_stores = today_info.get("stores", [])
 
     # 群組點餐模式
     if group_ordering:
-        # 取得當前使用者的偏好
-        profile = data.get_user_profile(username)
+        # 使用 display_name 作為 AI 看到的 username
+        ai_username = display_name or username
+
+        # 取得當前使用者的偏好（優先用 line_user_id 查詢）
+        profile = None
+        if line_user_id:
+            profile = data.get_user_by_line_id(line_user_id)
+        if not profile:
+            profile = data.get_user_profile(username)
+
         user_profile = None
         if profile:
             user_profile = profile.get("preferences", {})
 
+        # 格式化 session_orders，確保使用 display_name
+        formatted_orders = []
+        for order in (session_orders or []):
+            formatted_orders.append({
+                "display_name": order.get("display_name") or order.get("username", ""),
+                "items": order.get("items", []),
+                "total": order.get("total", 0)
+            })
+
         context = {
             "today": date.today().isoformat(),
             "today_stores": today_stores,
-            "username": username,  # 當前發訊息的人
+            "username": ai_username,  # 當前發訊息的人的顯示名稱
             "user_profile": user_profile,  # 當前使用者的偏好
             "group_ordering": True,
-            "session_orders": session_orders or [],  # 群組目前的訂單
+            "session_orders": formatted_orders,  # 群組目前的訂單
         }
 
         # 提供今日店家的菜單
@@ -189,19 +218,33 @@ async def call_ai(
     message: str,
     is_manager: bool = False,
     group_ordering: bool = False,
-    group_id: str | None = None
+    group_id: str | None = None,
+    line_user_id: str | None = None,
+    display_name: str | None = None
 ) -> dict:
     """呼叫 AI CLI（支援多種 Provider）
 
     使用自管理的對話歷史，不依賴 CLI session 機制。
     每次呼叫組合：系統上下文 + 對話歷史 + 當前訊息。
     使用 asyncio 非同步執行，不阻塞其他請求。
+
+    Args:
+        username: 使用者名稱（舊版相容）
+        message: 使用者訊息
+        is_manager: 是否為管理員模式
+        group_ordering: 是否為群組點餐模式
+        group_id: 群組 ID
+        line_user_id: LINE User ID（群組點餐時傳入）
+        display_name: LINE 顯示名稱（群組點餐時傳入）
     """
     timings = {}
     t_start = time.time()
 
     # 確保使用者存在
-    data.ensure_user(username)
+    if group_ordering and line_user_id and display_name:
+        data.ensure_user_by_line_id(line_user_id, display_name)
+    else:
+        data.ensure_user(username)
 
     # 取得 AI 設定
     ai_config = data.get_ai_config()
@@ -234,7 +277,10 @@ async def call_ai(
             session_orders = session.get("orders", [])
 
     system_prompt = get_system_prompt(is_manager, group_ordering)
-    context = build_context(username, is_manager, group_ordering, group_id, session_orders)
+    context = build_context(
+        username, is_manager, group_ordering, group_id, session_orders,
+        line_user_id, display_name
+    )
 
     # 組合完整訊息（包含對話歷史）
     context_str = json.dumps(context, ensure_ascii=False, indent=2)
@@ -544,15 +590,26 @@ def execute_actions(
     username: str,
     actions: list,
     is_manager: bool = False,
-    group_id: str | None = None
+    group_id: str | None = None,
+    line_user_id: str | None = None,
+    display_name: str | None = None
 ) -> list:
-    """執行多個 AI 請求的動作，回傳結果陣列"""
+    """執行多個 AI 請求的動作，回傳結果陣列
+
+    Args:
+        username: 使用者名稱（舊版相容用）
+        actions: 動作列表
+        is_manager: 是否為管理員模式
+        group_id: 群組 ID（群組點餐時傳入）
+        line_user_id: LINE User ID（群組點餐時傳入）
+        display_name: LINE 顯示名稱（群組點餐時傳入）
+    """
     if not actions:
         return []
 
     results = []
     for action in actions:
-        result = execute_action(username, action, is_manager, group_id)
+        result = execute_action(username, action, is_manager, group_id, line_user_id, display_name)
         results.append(result)
     return results
 
@@ -561,37 +618,52 @@ def execute_action(
     username: str,
     action: dict,
     is_manager: bool = False,
-    group_id: str | None = None
+    group_id: str | None = None,
+    line_user_id: str | None = None,
+    display_name: str | None = None
 ) -> dict:
-    """執行單一 AI 請求的動作"""
+    """執行單一 AI 請求的動作
+
+    Args:
+        username: 使用者名稱（舊版相容用）
+        action: 動作資料
+        is_manager: 是否為管理員模式
+        group_id: 群組 ID（群組點餐時傳入）
+        line_user_id: LINE User ID（群組點餐時傳入）
+        display_name: LINE 顯示名稱（群組點餐時傳入）
+    """
     if not action:
         return {"success": True}
 
     action_type = action.get("type")
     action_data = action.get("data", {})
 
+    # 群組點餐使用 line_user_id，否則回退到 username
+    user_id = line_user_id or username
+    user_display = display_name or username
+
     try:
         # 群組訂單操作（獨立於個人訂單）
         if action_type == "group_create_order" and group_id:
             from main import group_create_order
             items = action_data.get("items", [])
-            return group_create_order(group_id, username, items)
+            return group_create_order(group_id, user_id, user_display, items)
 
         elif action_type == "group_remove_item" and group_id:
             from main import group_remove_item
             item_name = action_data.get("item_name", "")
             quantity = action_data.get("quantity", 1)
-            return group_remove_item(group_id, username, item_name, quantity)
+            return group_remove_item(group_id, user_id, item_name, quantity)
 
         elif action_type == "group_cancel_order" and group_id:
             from main import group_cancel_order
-            return group_cancel_order(group_id, username)
+            return group_cancel_order(group_id, user_id)
 
         elif action_type == "group_update_order" and group_id:
             from main import group_update_order
             old_item = action_data.get("old_item", "")
             new_item = action_data.get("new_item", {})
-            return group_update_order(group_id, username, old_item, new_item)
+            return group_update_order(group_id, user_id, user_display, old_item, new_item)
 
         # 個人訂單操作
         elif action_type == "create_order":

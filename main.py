@@ -177,8 +177,10 @@ async def chat(request: Request):
     message = body.get("message", "").strip()
     is_manager = body.get("is_manager", False)
     group_id = body.get("group_id")  # 群組點餐時傳入
+    line_user_id = body.get("line_user_id")  # LINE User ID（群組點餐時傳入）
+    display_name = body.get("display_name") or username  # LINE 顯示名稱
 
-    if not username:
+    if not username and not display_name:
         return JSONResponse({"error": "請輸入名稱"}, status_code=400)
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
@@ -197,8 +199,8 @@ async def chat(request: Request):
                 }
             # 開始群組點餐
             session = start_group_session(group_id, {
-                "user_id": "",  # LINE Bot 會傳入
-                "display_name": username
+                "line_user_id": line_user_id or "",
+                "display_name": display_name
             })
             # 清空群組對話歷史（確保對話是這次點餐的內容）
             data.clear_group_chat_history(group_id)
@@ -249,7 +251,11 @@ async def chat(request: Request):
         group_ordering = True
 
     # 呼叫 AI（非同步，不阻塞其他請求）
-    response = await ai.call_ai(username, message, is_manager, group_ordering, group_id)
+    response = await ai.call_ai(
+        username, message, is_manager, group_ordering, group_id,
+        line_user_id if group_ordering else None,
+        display_name if group_ordering else None
+    )
 
     t_ai_done = time.time()
 
@@ -258,8 +264,13 @@ async def chat(request: Request):
     action_results = []
 
     if actions:
-        # 群組模式傳入 group_id，讓 execute_actions 處理群組訂單
-        action_results = ai.execute_actions(username, actions, is_manager, group_id if group_ordering else None)
+        # 群組模式傳入 group_id 和使用者資訊，讓 execute_actions 處理群組訂單
+        action_results = ai.execute_actions(
+            username, actions, is_manager,
+            group_id if group_ordering else None,
+            line_user_id if group_ordering else None,
+            display_name if group_ordering else None
+        )
 
         # 廣播每個動作的事件（僅個人模式）
         if not group_ordering:
@@ -599,13 +610,21 @@ def is_group_ordering(group_id: str) -> bool:
 
 
 def start_group_session(group_id: str, started_by: dict) -> dict:
-    """開始群組點餐 session"""
+    """開始群組點餐 session
+
+    Args:
+        started_by: 啟動者資訊，包含 line_user_id 和 display_name
+    """
     session = {
         "group_id": group_id,
         "status": "ordering",
         "started_at": datetime.now().isoformat(),
-        "started_by": started_by,
-        "orders": []
+        "started_by": {
+            "line_user_id": started_by.get("line_user_id", started_by.get("user_id", "")),
+            "display_name": started_by.get("display_name", "")
+        },
+        "orders": [],
+        "payments": {}
     }
     save_group_session(group_id, session)
     return session
@@ -621,12 +640,13 @@ def end_group_session(group_id: str) -> dict | None:
     return session
 
 
-def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
+def add_order_to_session(group_id: str, line_user_id: str, display_name: str, order: dict) -> bool:
     """將訂單加入群組 session
 
     Args:
         group_id: 群組 ID
-        username: 使用者名稱
+        line_user_id: LINE User ID
+        display_name: LINE 顯示名稱
         order: 訂單資料（包含 items, total 等）
 
     Returns:
@@ -638,7 +658,8 @@ def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
 
     # 建立簡化的訂單記錄
     order_record = {
-        "username": username,
+        "line_user_id": line_user_id,
+        "display_name": display_name,
         "order_id": order.get("order_id"),
         "store_name": order.get("store_name"),
         "items": [
@@ -646,7 +667,8 @@ def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
                 "name": item.get("name"),
                 "quantity": item.get("quantity", 1),
                 "price": item.get("price"),
-                "subtotal": item.get("subtotal")
+                "subtotal": item.get("subtotal"),
+                "note": item.get("note", "")
             }
             for item in order.get("items", [])
         ],
@@ -655,8 +677,61 @@ def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
     }
 
     session["orders"].append(order_record)
+
+    # 更新付款記錄
+    _update_session_payment(session, line_user_id, display_name)
+
     save_group_session(group_id, session)
     return True
+
+
+def _update_session_payment(session: dict, line_user_id: str, display_name: str) -> None:
+    """更新 session 中某使用者的付款記錄
+
+    Args:
+        session: 群組 session
+        line_user_id: LINE User ID
+        display_name: LINE 顯示名稱
+    """
+    # 確保 payments 欄位存在
+    if "payments" not in session:
+        session["payments"] = {}
+
+    # 計算該使用者的總金額
+    user_total = sum(
+        order.get("total", 0)
+        for order in session.get("orders", [])
+        if order.get("line_user_id") == line_user_id
+    )
+
+    # 取得或建立付款記錄
+    if line_user_id in session["payments"]:
+        payment = session["payments"][line_user_id]
+        old_amount = payment.get("amount", 0)
+        paid_amount = payment.get("paid_amount", 0)
+        payment["amount"] = user_total
+        payment["display_name"] = display_name
+
+        # 智慧更新付款狀態
+        if paid_amount > 0 and old_amount != user_total:
+            if user_total > paid_amount:
+                payment["paid"] = False
+                payment["note"] = f"已付 ${paid_amount}，待補 ${user_total - paid_amount}"
+            elif user_total < paid_amount:
+                payment["paid"] = True
+                payment["note"] = f"待退 ${paid_amount - user_total}"
+            else:
+                payment["paid"] = True
+                payment["note"] = ""
+    else:
+        session["payments"][line_user_id] = {
+            "display_name": display_name,
+            "amount": user_total,
+            "paid": False,
+            "paid_amount": 0,
+            "paid_at": None,
+            "note": ""
+        }
 
 
 def _get_today_menu_summary() -> str:
@@ -726,13 +801,16 @@ def generate_session_summary(session: dict) -> str:
     if not orders:
         return "📋 本次點餐沒有任何訂單"
 
-    # 依使用者分組
+    # 依使用者分組（優先使用 line_user_id，其次 username 作為向後相容）
     user_orders = {}
+    user_display_names = {}
     for order in orders:
-        username = order.get("username", "未知")
-        if username not in user_orders:
-            user_orders[username] = []
-        user_orders[username].append(order)
+        user_key = order.get("line_user_id") or order.get("username", "未知")
+        display_name = order.get("display_name") or order.get("username", "未知")
+        if user_key not in user_orders:
+            user_orders[user_key] = []
+            user_display_names[user_key] = display_name
+        user_orders[user_key].append(order)
 
     # 統計品項
     item_counts = {}
@@ -741,7 +819,8 @@ def generate_session_summary(session: dict) -> str:
     lines = ["📋 點餐摘要", ""]
 
     # 各人訂單
-    for username, user_order_list in user_orders.items():
+    for user_key, user_order_list in user_orders.items():
+        display_name = user_display_names.get(user_key, "未知")
         user_total = 0
         user_items = []
         for order in user_order_list:
@@ -767,7 +846,7 @@ def generate_session_summary(session: dict) -> str:
                     item_counts[item_key] = 0
                 item_counts[item_key] += qty
 
-        lines.append(f"👤 {username}（${user_total}）")
+        lines.append(f"👤 {display_name}（${user_total}）")
         lines.extend(user_items)
         lines.append("")
         grand_total += user_total
@@ -786,12 +865,13 @@ def generate_session_summary(session: dict) -> str:
 
 # === 群組訂單操作（獨立於個人訂單）===
 
-def group_create_order(group_id: str, username: str, items: list) -> dict:
+def group_create_order(group_id: str, line_user_id: str, display_name: str, items: list) -> dict:
     """群組點餐：建立訂單（只儲存在 session 中）
 
     Args:
         group_id: 群組 ID
-        username: 使用者名稱
+        line_user_id: LINE User ID
+        display_name: LINE 顯示名稱
         items: 品項列表 [{"name": "...", "quantity": 1, "note": "..."}]
 
     Returns:
@@ -847,7 +927,8 @@ def group_create_order(group_id: str, username: str, items: list) -> dict:
 
     # 建立訂單記錄
     order = {
-        "username": username,
+        "line_user_id": line_user_id,
+        "display_name": display_name,
         "items": enriched_items,
         "total": total,
         "created_at": datetime.now().isoformat()
@@ -855,17 +936,21 @@ def group_create_order(group_id: str, username: str, items: list) -> dict:
 
     # 加入 session
     session["orders"].append(order)
+
+    # 更新付款記錄
+    _update_session_payment(session, line_user_id, display_name)
+
     save_group_session(group_id, session)
 
     return {"success": True, "order": order}
 
 
-def group_remove_item(group_id: str, username: str, item_name: str, quantity: int = 1) -> dict:
+def group_remove_item(group_id: str, line_user_id: str, item_name: str, quantity: int = 1) -> dict:
     """群組點餐：移除品項
 
     Args:
         group_id: 群組 ID
-        username: 使用者名稱
+        line_user_id: LINE User ID
         item_name: 品項名稱
         quantity: 移除數量
 
@@ -877,9 +962,12 @@ def group_remove_item(group_id: str, username: str, item_name: str, quantity: in
         return {"success": False, "error": "群組不在點餐中"}
 
     # 找到該使用者的訂單
+    display_name = None
     for order in session["orders"]:
-        if order.get("username") != username:
+        if order.get("line_user_id") != line_user_id:
             continue
+
+        display_name = order.get("display_name", "")
 
         # 找到品項
         for i, item in enumerate(order.get("items", [])):
@@ -900,18 +988,22 @@ def group_remove_item(group_id: str, username: str, item_name: str, quantity: in
                 if not order["items"]:
                     session["orders"].remove(order)
 
+                # 更新付款記錄
+                if display_name:
+                    _update_session_payment(session, line_user_id, display_name)
+
                 save_group_session(group_id, session)
                 return {"success": True}
 
     return {"success": False, "error": f"找不到品項：{item_name}"}
 
 
-def group_cancel_order(group_id: str, username: str) -> dict:
+def group_cancel_order(group_id: str, line_user_id: str) -> dict:
     """群組點餐：取消使用者的所有訂單
 
     Args:
         group_id: 群組 ID
-        username: 使用者名稱
+        line_user_id: LINE User ID
 
     Returns:
         {"success": True} 或 {"success": False, "error": "..."}
@@ -920,23 +1012,35 @@ def group_cancel_order(group_id: str, username: str) -> dict:
     if not session or session.get("status") != "ordering":
         return {"success": False, "error": "群組不在點餐中"}
 
+    # 取得該使用者的 display_name
+    display_name = None
+    for order in session["orders"]:
+        if order.get("line_user_id") == line_user_id:
+            display_name = order.get("display_name", "")
+            break
+
     # 移除該使用者的所有訂單
     original_count = len(session["orders"])
-    session["orders"] = [o for o in session["orders"] if o.get("username") != username]
+    session["orders"] = [o for o in session["orders"] if o.get("line_user_id") != line_user_id]
 
     if len(session["orders"]) == original_count:
         return {"success": False, "error": "你目前沒有訂單"}
+
+    # 更新付款記錄（金額會變成 0）
+    if display_name:
+        _update_session_payment(session, line_user_id, display_name)
 
     save_group_session(group_id, session)
     return {"success": True}
 
 
-def group_update_order(group_id: str, username: str, old_item: str, new_item: dict) -> dict:
+def group_update_order(group_id: str, line_user_id: str, display_name: str, old_item: str, new_item: dict) -> dict:
     """群組點餐：修改訂單（替換品項）
 
     Args:
         group_id: 群組 ID
-        username: 使用者名稱
+        line_user_id: LINE User ID
+        display_name: LINE 顯示名稱
         old_item: 原品項名稱
         new_item: 新品項 {"name": "...", "quantity": 1}
 
@@ -944,13 +1048,304 @@ def group_update_order(group_id: str, username: str, old_item: str, new_item: di
         {"success": True} 或 {"success": False, "error": "..."}
     """
     # 先移除舊品項
-    result = group_remove_item(group_id, username, old_item, quantity=999)
+    result = group_remove_item(group_id, line_user_id, old_item, quantity=999)
     if not result.get("success"):
         return result
 
     # 新增新品項
-    return group_create_order(group_id, username, [new_item])
+    return group_create_order(group_id, line_user_id, display_name, [new_item])
 
+
+# === 超級管理員 API ===
+
+@app.get("/api/super-admin/groups")
+async def super_admin_get_groups():
+    """取得所有已啟用群組列表（超級管理員用）
+
+    回傳格式：
+    {
+        "groups": [
+            {
+                "id": "Cxxxxxxxxxxxxxxxxx",
+                "name": "午餐群組",
+                "activated_at": "2025-12-09T10:00:00",
+                "member_count": 5,
+                "order_count": 3,
+                "total_amount": 255
+            }
+        ]
+    }
+    """
+    whitelist = get_linebot_whitelist()
+    groups = []
+
+    for group in whitelist.get("groups", []):
+        group_id = group.get("id")
+        session = get_group_session(group_id)
+
+        # 計算訂單統計
+        order_count = 0
+        total_amount = 0
+        member_ids = set()
+
+        if session:
+            orders = session.get("orders", [])
+            for order in orders:
+                user_id = order.get("line_user_id") or order.get("username")
+                if user_id:
+                    member_ids.add(user_id)
+                total_amount += order.get("total", 0)
+            order_count = len(orders)
+
+        groups.append({
+            "id": group_id,
+            "name": group.get("name", ""),
+            "activated_at": group.get("registered_at"),
+            "member_count": len(member_ids),
+            "order_count": order_count,
+            "total_amount": total_amount
+        })
+
+    return {"groups": groups}
+
+
+@app.get("/api/super-admin/groups/{group_id}/orders")
+async def super_admin_get_group_orders(group_id: str):
+    """取得指定群組的訂單（超級管理員用）
+
+    回傳格式：
+    {
+        "group_id": "Cxxxxxxxxxxxxxxxxx",
+        "group_name": "午餐群組",
+        "status": "ended",
+        "orders": [
+            {
+                "line_user_id": "Uxxxxxxxxxxxxxxxxx",
+                "display_name": "王小明",
+                "items": [...],
+                "total": 85
+            }
+        ],
+        "payments": {...},
+        "summary": {...}
+    }
+    """
+    # 確認群組存在
+    whitelist = get_linebot_whitelist()
+    group_info = next((g for g in whitelist.get("groups", []) if g["id"] == group_id), None)
+
+    if not group_info:
+        return JSONResponse({"error": "群組不存在"}, status_code=404)
+
+    session = get_group_session(group_id)
+
+    if not session:
+        return {
+            "group_id": group_id,
+            "group_name": group_info.get("name", ""),
+            "status": "no_session",
+            "orders": [],
+            "payments": {},
+            "summary": {
+                "order_count": 0,
+                "total_amount": 0,
+                "paid_amount": 0,
+                "pending_amount": 0
+            }
+        }
+
+    # 整理訂單（依使用者分組）
+    user_orders = {}
+    for order in session.get("orders", []):
+        user_id = order.get("line_user_id") or order.get("username", "")
+        display_name = order.get("display_name") or order.get("username", "")
+
+        if user_id not in user_orders:
+            user_orders[user_id] = {
+                "line_user_id": user_id,
+                "display_name": display_name,
+                "items": [],
+                "total": 0
+            }
+
+        # 合併品項
+        for item in order.get("items", []):
+            user_orders[user_id]["items"].append(item)
+        user_orders[user_id]["total"] += order.get("total", 0)
+
+    orders_list = list(user_orders.values())
+
+    # 計算統計
+    total_amount = sum(o["total"] for o in orders_list)
+    payments = session.get("payments", {})
+    paid_amount = sum(p.get("paid_amount", 0) for p in payments.values())
+
+    return {
+        "group_id": group_id,
+        "group_name": group_info.get("name", ""),
+        "status": session.get("status", "unknown"),
+        "orders": orders_list,
+        "payments": payments,
+        "summary": {
+            "order_count": len(orders_list),
+            "total_amount": total_amount,
+            "paid_amount": paid_amount,
+            "pending_amount": total_amount - paid_amount
+        }
+    }
+
+
+@app.post("/api/super-admin/groups/{group_id}/orders")
+async def super_admin_create_proxy_order(group_id: str, request: Request):
+    """代理點餐（超級管理員用）
+
+    請求格式：
+    {
+        "line_user_id": "Uxxxxxxxxxxxxxxxxx",
+        "display_name": "王小明",
+        "items": [
+            {"name": "雞腿便當", "quantity": 1, "note": ""}
+        ]
+    }
+    """
+    body = await request.json()
+    line_user_id = body.get("line_user_id")
+    display_name = body.get("display_name", "")
+    items = body.get("items", [])
+
+    if not line_user_id:
+        return JSONResponse({"error": "缺少 line_user_id"}, status_code=400)
+    if not items:
+        return JSONResponse({"error": "缺少品項"}, status_code=400)
+
+    # 確認群組存在且在點餐中
+    session = get_group_session(group_id)
+    if not session:
+        return JSONResponse({"error": "群組沒有進行中的點餐"}, status_code=400)
+    if session.get("status") != "ordering":
+        return JSONResponse({"error": "群組點餐已結束"}, status_code=400)
+
+    # 確保使用者存在
+    data.ensure_user_by_line_id(line_user_id, display_name)
+
+    # 建立訂單
+    result = group_create_order(group_id, line_user_id, display_name, items)
+    return result
+
+
+@app.put("/api/super-admin/groups/{group_id}/orders/{user_id}")
+async def super_admin_update_order(group_id: str, user_id: str, request: Request):
+    """修改使用者訂單（超級管理員用）
+
+    請求格式：
+    {
+        "items": [
+            {"name": "排骨便當", "quantity": 2, "note": "不要酸菜"}
+        ]
+    }
+    """
+    body = await request.json()
+    items = body.get("items", [])
+
+    if not items:
+        return JSONResponse({"error": "缺少品項"}, status_code=400)
+
+    session = get_group_session(group_id)
+    if not session:
+        return JSONResponse({"error": "群組沒有點餐記錄"}, status_code=404)
+
+    # 找到該使用者的訂單並取得 display_name
+    display_name = None
+    for order in session.get("orders", []):
+        if order.get("line_user_id") == user_id:
+            display_name = order.get("display_name", "")
+            break
+
+    if display_name is None:
+        return JSONResponse({"error": "找不到該使用者的訂單"}, status_code=404)
+
+    # 先取消原訂單
+    group_cancel_order(group_id, user_id)
+
+    # 重新建立訂單
+    result = group_create_order(group_id, user_id, display_name, items)
+    return result
+
+
+@app.delete("/api/super-admin/groups/{group_id}/orders/{user_id}")
+async def super_admin_delete_order(group_id: str, user_id: str):
+    """刪除使用者訂單（超級管理員用）"""
+    session = get_group_session(group_id)
+    if not session:
+        return JSONResponse({"error": "群組沒有點餐記錄"}, status_code=404)
+
+    # 檢查使用者是否有訂單
+    has_order = any(o.get("line_user_id") == user_id for o in session.get("orders", []))
+    if not has_order:
+        return JSONResponse({"error": "找不到該使用者的訂單"}, status_code=404)
+
+    # 取消訂單
+    result = group_cancel_order(group_id, user_id)
+
+    # 如果已付款，標記待退款
+    payments = session.get("payments", {})
+    if user_id in payments:
+        payment = payments[user_id]
+        paid_amount = payment.get("paid_amount", 0)
+        if paid_amount > 0:
+            payment["note"] = f"待退 ${paid_amount}"
+            payment["amount"] = 0
+            save_group_session(group_id, session)
+
+    return result
+
+
+@app.post("/api/super-admin/groups/{group_id}/payments/{user_id}/mark-paid")
+async def super_admin_mark_paid(group_id: str, user_id: str):
+    """標記已付款（超級管理員用）"""
+    session = get_group_session(group_id)
+    if not session:
+        return JSONResponse({"error": "群組沒有點餐記錄"}, status_code=404)
+
+    payments = session.get("payments", {})
+    if user_id not in payments:
+        return JSONResponse({"error": "找不到該使用者的付款記錄"}, status_code=404)
+
+    payment = payments[user_id]
+    payment["paid"] = True
+    payment["paid_amount"] = payment.get("amount", 0)
+    payment["paid_at"] = datetime.now().isoformat()
+    payment["note"] = ""
+
+    save_group_session(group_id, session)
+    return {"success": True, "payment": payment}
+
+
+@app.post("/api/super-admin/groups/{group_id}/payments/{user_id}/refund")
+async def super_admin_mark_refund(group_id: str, user_id: str):
+    """標記已退款（超級管理員用）"""
+    session = get_group_session(group_id)
+    if not session:
+        return JSONResponse({"error": "群組沒有點餐記錄"}, status_code=404)
+
+    payments = session.get("payments", {})
+    if user_id not in payments:
+        return JSONResponse({"error": "找不到該使用者的付款記錄"}, status_code=404)
+
+    payment = payments[user_id]
+    current_amount = payment.get("amount", 0)
+
+    # 退款後，paid_amount 調整為等於 amount
+    payment["paid_amount"] = current_amount
+    if current_amount > 0:
+        payment["paid"] = True
+    payment["note"] = ""
+
+    save_group_session(group_id, session)
+    return {"success": True, "payment": payment}
+
+
+# === LINE Bot 白名單 API ===
 
 @app.post("/api/linebot/register")
 async def linebot_register(request: Request):

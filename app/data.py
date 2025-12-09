@@ -645,47 +645,6 @@ def update_daily_summary_with_order(username: str, order: dict) -> dict:
     return summary
 
 
-# === 聊天功能 ===
-
-def get_chat_messages(chat_date: str = None) -> list[dict]:
-    """取得某日的聊天記錄"""
-    if chat_date is None:
-        chat_date = date.today().isoformat()
-    data = read_json(DATA_DIR / "chat" / f"{chat_date}.json")
-    if data:
-        return data.get("messages", [])
-    return []
-
-
-def save_chat_message(username: str, content: str) -> dict:
-    """儲存新的聊天訊息，回傳新訊息物件"""
-    chat_date = date.today().isoformat()
-    chat_file = DATA_DIR / "chat" / f"{chat_date}.json"
-
-    data = read_json(chat_file) or {
-        "date": chat_date,
-        "messages": []
-    }
-
-    # 建立新訊息
-    new_message = {
-        "id": f"{chat_date}-{len(data['messages']) + 1:04d}",
-        "username": username,
-        "content": content,
-        "timestamp": datetime.now().isoformat()
-    }
-
-    data["messages"].append(new_message)
-    write_json(chat_file, data)
-
-    return new_message
-
-
-def save_system_message(content: str) -> dict:
-    """儲存系統訊息（由呷爸發送）"""
-    return save_chat_message("呷爸", content)
-
-
 # === AI 對話歷史管理 ===
 
 def get_ai_chat_history(

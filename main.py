@@ -50,12 +50,6 @@ async def index():
     return Path("templates/index.html").read_text(encoding="utf-8")
 
 
-@app.get("/order", response_class=HTMLResponse)
-async def order_page():
-    """訂餐頁"""
-    return Path("templates/order.html").read_text(encoding="utf-8")
-
-
 @app.get("/manager", response_class=HTMLResponse)
 async def manager_page():
     """管理頁"""
@@ -63,10 +57,9 @@ async def manager_page():
 
 
 @app.get("/api/today")
-async def get_today(username: str = None):
-    """取得今日資訊"""
+async def get_today():
+    """取得今日資訊（看板用）"""
     today_info = data.get_today_info()
-    summary = data.get_daily_summary()
 
     # 加入所有今日店家的詳細資訊和菜單
     stores_detail = []
@@ -81,18 +74,9 @@ async def get_today(username: str = None):
                     "menu": menu_info
                 })
 
-    # 取得使用者偏好稱呼
-    preferred_name = None
-    if username:
-        profile = data.get_user_profile(username)
-        if profile:
-            preferred_name = profile.get("preferences", {}).get("preferred_name")
-
     return {
         "today": today_info,
-        "stores": stores_detail,
-        "summary": summary,
-        "preferred_name": preferred_name
+        "stores": stores_detail
     }
 
 
@@ -184,6 +168,10 @@ async def chat(request: Request):
         return JSONResponse({"error": "請輸入名稱"}, status_code=400)
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
+
+    # 個人訂餐模式已移除，僅支援群組點餐和管理員模式
+    if not group_id and not is_manager:
+        return JSONResponse({"error": "個人訂餐功能已移除，請透過 LINE 群組點餐"}, status_code=400)
 
     # 處理群組點餐指令
     message_lower = message.strip().lower()
@@ -342,7 +330,7 @@ async def chat(request: Request):
                     })
                     break  # 只發送一次事件
         else:
-            # 個人模式：廣播各類事件
+            # 管理員模式：廣播店家變更等事件
             for result in action_results:
                 if result.get("success") and result.get("event"):
                     event_type = result["event"]
@@ -353,12 +341,6 @@ async def chat(request: Request):
                         "store_name": result.get("store_name"),
                     }
                     await broadcast_event(event_type, event_data)
-
-                    # 店家變更時，在團體聊天室新增系統訊息
-                    if event_type == "store_changed" and result.get("store_name"):
-                        store_name = result.get("store_name")
-                        msg = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
-                        await sio.emit("chat_message", msg)
 
     t_api_end = time.time()
 
@@ -380,13 +362,6 @@ async def chat(request: Request):
             }
         }
     }
-
-
-@app.get("/api/chat/messages")
-async def get_chat_messages():
-    """取得今日聊天記錄"""
-    messages = data.get_chat_messages()
-    return {"messages": messages}
 
 
 @app.get("/api/board/chat")
@@ -452,27 +427,6 @@ async def get_board_orders():
     ]
 
     return result
-
-
-@app.post("/api/chat/send")
-async def send_chat_message(request: Request):
-    """發送聊天訊息"""
-    body = await request.json()
-    username = body.get("username", "").strip()
-    content = body.get("content", "").strip()
-
-    if not username:
-        return JSONResponse({"error": "請輸入名稱"}, status_code=400)
-    if not content:
-        return JSONResponse({"error": "請輸入訊息內容"}, status_code=400)
-
-    # 儲存訊息
-    message = data.save_chat_message(username, content)
-
-    # 廣播給所有連線者
-    await sio.emit("chat_message", message)
-
-    return {"success": True, "message": message}
 
 
 @app.post("/api/session/reset")

@@ -23,15 +23,8 @@ def get_system_prompt(is_manager: bool = False, group_ordering: bool = False) ->
 
 請用繁體中文回應。"""
 
-    if is_manager:
-        # 管理員模式：載入 manager_prompt
-        base_prompt = prompt_data.get("manager_prompt", "")
-        return f"""{base_prompt}
-
-請用繁體中文回應。"""
-
-    # 一般使用者模式：載入 user_prompt
-    base_prompt = prompt_data.get("user_prompt", "")
+    # 管理員模式：載入 manager_prompt
+    base_prompt = prompt_data.get("manager_prompt", "")
     return f"""{base_prompt}
 
 請用繁體中文回應。"""

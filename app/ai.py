@@ -273,10 +273,10 @@ async def call_ai(
     timings = {}
     t_start = time.time()
 
-    # 確保使用者存在
-    if group_ordering and line_user_id and display_name:
+    # 確保使用者存在（優先使用 line_user_id）
+    if line_user_id and display_name:
         data.ensure_user_by_line_id(line_user_id, display_name)
-    else:
+    elif username:
         data.ensure_user(username)
 
     # 取得 AI 設定

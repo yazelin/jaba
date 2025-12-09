@@ -396,6 +396,64 @@ async def get_board_chat():
     return {"messages": messages}
 
 
+@app.get("/api/board/orders")
+async def get_board_orders():
+    """取得看板用的所有群組訂單彙總"""
+    whitelist = get_linebot_whitelist()
+    groups = whitelist.get("groups", [])
+
+    result = {
+        "groups": [],
+        "total_orders": 0,
+        "grand_total": 0,
+        "item_summary": {}
+    }
+
+    for group in groups:
+        group_id = group.get("id")
+        group_name = group.get("name") or f"群組 ...{group_id[-8:]}"
+
+        session = get_group_session(group_id)
+        if not session:
+            continue
+
+        orders = session.get("orders", [])
+        if not orders:
+            continue
+
+        # 計算該群組的訂單統計
+        group_total = sum(o.get("total", 0) for o in orders)
+
+        group_data = {
+            "group_id": group_id,
+            "group_name": group_name,
+            "status": session.get("status", ""),
+            "orders": orders,
+            "order_count": len(orders),
+            "total": group_total
+        }
+
+        result["groups"].append(group_data)
+        result["total_orders"] += len(orders)
+        result["grand_total"] += group_total
+
+        # 品項統計
+        for order in orders:
+            for item in order.get("items", []):
+                item_name = item.get("name", "")
+                qty = item.get("quantity", 1)
+                if item_name:
+                    result["item_summary"][item_name] = result["item_summary"].get(item_name, 0) + qty
+
+    # 轉換品項統計為陣列格式
+    result["item_summary"] = [
+        {"name": k, "quantity": v}
+        for k, v in sorted(result["item_summary"].items(), key=lambda x: -x[1])
+    ]
+
+    return result
+
+
 @app.post("/api/chat/send")
 async def send_chat_message(request: Request):
     """發送聊天訊息"""

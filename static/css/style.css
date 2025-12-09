@@ -79,7 +79,8 @@ body::before {
 }
 
 .board-left .chat-readonly {
-  max-height: 400px;
+  height: 280px;
+  max-height: 280px;
 }
 
 .board-right .orders-list {
@@ -89,16 +90,12 @@ body::before {
 
 .board-right .buttons {
   margin-top: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
+  text-align: center;
 }
 
 .board-right .buttons .btn {
   padding: 12px 25px;
   font-size: 1em;
-  flex-shrink: 0;
 }
 
 /* 看板頁 RWD */
@@ -233,25 +230,39 @@ body::before {
   color: #8B6914;
 }
 
-/* QRCode 區塊 */
-.qrcode-section {
+/* QRCode 區塊（看板左欄） */
+.board-left .qrcode-section {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
+  background: #FFFAF0;
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 15px;
 }
 
 .qrcode-image {
-  width: 80px;
-  height: 80px;
+  width: 100px;
+  height: 100px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+.qrcode-info {
+  flex: 1;
+}
+
+.qrcode-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #5D4037;
+  margin: 0 0 5px 0;
+}
+
 .qrcode-hint {
-  font-size: 0.85em;
+  font-size: 0.9em;
   color: #666;
   margin: 0;
-  white-space: nowrap;
 }
 
 .store-name-item {
@@ -1143,6 +1154,23 @@ body::before {
   padding: 8px 10px;
   background: rgba(139, 105, 20, 0.1);
   border-radius: 8px;
+}
+
+/* 群組訂單標題（看板頁） */
+.orders-group-header {
+  font-size: 1em;
+  font-weight: bold;
+  color: #5D4037;
+  margin: 8px 0;
+  padding: 6px 10px;
+  background: rgba(139, 105, 20, 0.1);
+  border-radius: 6px;
+}
+
+.orders-group-divider {
+  height: 1px;
+  background: #D4A574;
+  margin: 12px 0;
 }
 
 .live-order-item {

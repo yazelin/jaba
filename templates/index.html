@@ -19,7 +19,7 @@
 
       <!-- 左右兩欄 -->
       <div class="board-columns">
-        <!-- 左欄：店家 + 聊天 -->
+        <!-- 左欄：店家 + 聊天 + QRCode -->
         <div class="board-left">
           <div class="store-name" id="store-name">
             <span class="no-store">尚未設定今日店家</span>
@@ -32,6 +32,15 @@
               <div class="empty-state">
                 <p>尚無聊天訊息</p>
               </div>
+            </div>
+          </div>
+
+          <!-- LINE 好友 QRCode -->
+          <div class="qrcode-section">
+            <img src="/static/images/588voelu.png" alt="加入呷爸好友" class="qrcode-image">
+            <div class="qrcode-info">
+              <p class="qrcode-title">加入呷爸好友</p>
+              <p class="qrcode-hint">掃碼加入 LINE 群組點餐</p>
             </div>
           </div>
         </div>
@@ -63,10 +72,6 @@
           </div>
 
           <div class="buttons">
-            <div class="qrcode-section">
-              <img src="/static/images/588voelu.png" alt="加入呷爸好友" class="qrcode-image">
-              <p class="qrcode-hint">掃碼加入呷爸好友</p>
-            </div>
             <a href="/manager" class="btn btn-secondary">⚙️ 管理員</a>
           </div>
         </div>
@@ -109,23 +114,22 @@
     document.getElementById('today-date').textContent =
       `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()} 星期${['日','一','二','三','四','五','六'][today.getDay()]}`;
 
-    // 載入資料
-    async function loadData() {
+    // 載入店家資料
+    async function loadStoreData() {
       try {
         const res = await fetch('/api/today');
         const data = await res.json();
-        updateBoard(data);
+        updateStoreDisplay(data);
       } catch (err) {
-        console.error('載入失敗:', err);
+        console.error('載入店家失敗:', err);
       }
     }
 
-    // 更新看板
-    function updateBoard(data) {
-      const { stores: storesDetail, summary } = data;
-
-      // 更新店家名稱
+    // 更新店家顯示
+    function updateStoreDisplay(data) {
+      const { stores: storesDetail } = data;
       const storeNameEl = document.getElementById('store-name');
+
       if (storesDetail && storesDetail.length > 0) {
         let storeHtml = '';
         storesDetail.forEach((storeData, index) => {
@@ -145,54 +149,44 @@
       } else {
         storeNameEl.innerHTML = '<span class="no-store">尚未設定今日店家</span>';
       }
+    }
 
-      // 更新訂單列表（支援多店家分組）
+    // 載入群組訂單
+    async function loadGroupOrders() {
+      try {
+        const res = await fetch('/api/board/orders');
+        const data = await res.json();
+        updateGroupOrdersDisplay(data);
+      } catch (err) {
+        console.error('載入群組訂單失敗:', err);
+      }
+    }
+
+    // 更新群組訂單顯示
+    function updateGroupOrdersDisplay(data) {
       const ordersListEl = document.getElementById('orders-list');
-      if (summary && summary.orders && summary.orders.length > 0) {
-        const hasMultipleStores = storesDetail && storesDetail.length > 1;
+      const itemSummaryEl = document.getElementById('item-summary');
 
-        if (hasMultipleStores) {
-          // 按店家分組訂單
-          const ordersByStore = {};
-          summary.orders.forEach(order => {
-            const storeId = order.store_id || 'unknown';
-            if (!ordersByStore[storeId]) {
-              ordersByStore[storeId] = [];
-            }
-            ordersByStore[storeId].push(order);
-          });
+      // 更新訂單列表（分群組顯示）
+      if (data.groups && data.groups.length > 0) {
+        let html = '';
+        data.groups.forEach((group, index) => {
+          if (index > 0) html += '<div class="orders-group-divider"></div>';
 
-          let html = '';
-          Object.keys(ordersByStore).forEach((storeId, index) => {
-            const orders = ordersByStore[storeId];
-            const storeName = orders[0]?.store_name || '未知店家';
+          const statusIcon = group.status === 'ordering' ? '🟢' : '⚪';
+          html += `<div class="orders-group-header">${statusIcon} ${group.group_name}</div>`;
 
-            if (index > 0) html += '<div class="orders-store-divider"></div>';
-            html += `<div class="orders-store-header">🏪 ${storeName}</div>`;
-
-            html += orders.map(order => `
-              <div class="order-card">
-                <div>
-                  <div class="order-user">${order.username}</div>
-                  <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}${i.note ? ` (${i.note})` : ''}`).join('、')}</div>
-                </div>
-                <div class="order-total">$${order.total}</div>
-              </div>
-            `).join('');
-          });
-          ordersListEl.innerHTML = html;
-        } else {
-          // 單店家：直接列出
-          ordersListEl.innerHTML = summary.orders.map(order => `
+          html += group.orders.map(order => `
             <div class="order-card">
               <div>
-                <div class="order-user">${order.username}</div>
+                <div class="order-user">${order.display_name || '匿名'}</div>
                 <div class="order-items">${order.items.map(i => `${i.name} x${i.quantity}${i.note ? ` (${i.note})` : ''}`).join('、')}</div>
               </div>
               <div class="order-total">$${order.total}</div>
             </div>
           `).join('');
-        }
+        });
+        ordersListEl.innerHTML = html;
       } else {
         ordersListEl.innerHTML = `
           <div class="empty-state">
@@ -203,9 +197,8 @@
       }
 
       // 更新品項統計
-      const itemSummaryEl = document.getElementById('item-summary');
-      if (summary && summary.item_summary && summary.item_summary.length > 0) {
-        itemSummaryEl.innerHTML = summary.item_summary.map(item =>
+      if (data.item_summary && data.item_summary.length > 0) {
+        itemSummaryEl.innerHTML = data.item_summary.map(item =>
           `<span class="item-badge">${item.name} x${item.quantity}</span>`
         ).join('');
       } else {
@@ -213,8 +206,13 @@
       }
 
       // 更新總金額
-      const grandTotal = summary ? summary.grand_total || 0 : 0;
-      document.querySelector('.grand-total-amount').textContent = `$${grandTotal}`;
+      document.querySelector('.grand-total-amount').textContent = `$${data.grand_total || 0}`;
+    }
+
+    // 載入所有資料
+    function loadData() {
+      loadStoreData();
+      loadGroupOrders();
     }
 
     // 顯示通知

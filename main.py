@@ -109,47 +109,6 @@ async def get_menu(store_id: str):
     return menu
 
 
-@app.get("/api/payments")
-async def get_payments():
-    """取得今日付款狀態"""
-    payments = data.get_payments()
-    return payments or {"records": [], "total_collected": 0, "total_pending": 0}
-
-
-@app.post("/api/refund")
-async def mark_refund(request: Request):
-    """標記已退款"""
-    body = await request.json()
-    username = body.get("username")
-
-    if not username:
-        return JSONResponse({"error": "缺少 username"}, status_code=400)
-
-    result = ai._mark_refunded({"username": username})
-
-    if result.get("success"):
-        await broadcast_event("payment_updated", {"username": username})
-
-    return result
-
-
-@app.post("/api/mark-paid")
-async def mark_paid(request: Request):
-    """標記已付款"""
-    body = await request.json()
-    username = body.get("username")
-
-    if not username:
-        return JSONResponse({"error": "缺少 username"}, status_code=400)
-
-    result = ai._mark_paid({"username": username})
-
-    if result.get("success"):
-        await broadcast_event("payment_updated", {"username": username})
-
-    return result
-
-
 @app.post("/api/chat")
 async def chat(request: Request):
     """與 AI 對話"""

@@ -279,8 +279,6 @@
     const socket = io();
     const username = '管理員';
     let todayInfo = null;
-    let todaySummary = null;
-    let todayPayments = null;
     let todayStores = [];  // 多店家資料
     let allStores = [];    // 所有店家資料（含菜單）
 
@@ -319,25 +317,16 @@
     // === 管理面板資料載入 ===
     async function loadAdminData(forUsername = null) {
       try {
-        // 同時載入今日資訊和付款資料
+        // 載入今日資訊
         const todayUrl = forUsername ? `/api/today?username=${encodeURIComponent(forUsername)}` : '/api/today';
-        const [todayRes, paymentsRes] = await Promise.all([
-          fetch(todayUrl),
-          fetch('/api/payments')
-        ]);
-
+        const todayRes = await fetch(todayUrl);
         const todayData = await todayRes.json();
-        const paymentsData = await paymentsRes.json();
 
         todayInfo = todayData.today;
-        todaySummary = todayData.summary;
-        todayPayments = paymentsData;
         todayStores = todayData.stores || [];
 
-        // 更新各面板
+        // 更新今日店家面板
         updateStoreInfoPanel(todayData.stores);
-        updateOrdersPanel(todayData.summary);
-        updatePaymentsPanel(paymentsData);
 
         return todayData.preferred_name;
       } catch (err) {
@@ -368,154 +357,6 @@
       } else {
         content.innerHTML = '<div class="no-store-msg">尚未設定今日店家</div>';
       }
-    }
-
-    function updateOrdersPanel(summary) {
-      const content = document.getElementById('orders-content');
-      if (!summary || !summary.orders || summary.orders.length === 0) {
-        content.innerHTML = '<div class="orders-empty">目前還沒有訂單</div>';
-        return;
-      }
-
-      // 多店家時按店家分組
-      const hasMultipleStores = todayStores && todayStores.length > 1;
-      let html = '';
-
-      if (hasMultipleStores) {
-        // 按店家分組訂單
-        const ordersByStore = {};
-        summary.orders.forEach(order => {
-          const storeId = order.store_id || 'unknown';
-          if (!ordersByStore[storeId]) {
-            ordersByStore[storeId] = [];
-          }
-          ordersByStore[storeId].push(order);
-        });
-
-        // 依店家顯示
-        Object.keys(ordersByStore).forEach((storeId, index) => {
-          const orders = ordersByStore[storeId];
-          const storeName = orders[0]?.store_name || '未知店家';
-
-          if (index > 0) html += '<div class="orders-store-divider"></div>';
-          html += `<div class="orders-store-title">🏪 ${storeName}</div>`;
-
-          orders.forEach(order => {
-            const itemsText = order.items.map(i => {
-              let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
-              if (i.note) text += ` (${i.note})`;
-              return text;
-            }).join('、');
-            html += `
-              <div class="live-order-item">
-                <div>
-                  <div class="live-order-user">${order.username}</div>
-                  <div class="live-order-items">${itemsText}</div>
-                </div>
-                <div class="live-order-total">$${order.total}</div>
-              </div>
-            `;
-          });
-        });
-      } else {
-        // 單店家：直接列出
-        summary.orders.forEach(order => {
-          const itemsText = order.items.map(i => {
-            let text = i.quantity > 1 ? `${i.name}x${i.quantity}` : i.name;
-            if (i.note) text += ` (${i.note})`;
-            return text;
-          }).join('、');
-          html += `
-            <div class="live-order-item">
-              <div>
-                <div class="live-order-user">${order.username}</div>
-                <div class="live-order-items">${itemsText}</div>
-              </div>
-              <div class="live-order-total">$${order.total}</div>
-            </div>
-          `;
-        });
-      }
-
-      // 加上總計
-      html += `
-        <div class="orders-summary">
-          <span class="orders-summary-label">總計 ${summary.orders.length} 份</span>
-          <span class="orders-summary-amount">$${summary.grand_total}</span>
-        </div>
-      `;
-      content.innerHTML = html;
-    }
-
-    function updatePaymentsPanel(payments) {
-      const content = document.getElementById('payments-content');
-      if (!payments || !payments.records || payments.records.length === 0) {
-        content.innerHTML = '<div class="orders-empty">無付款資料</div>';
-        return;
-      }
-
-      let html = '';
-      payments.records.forEach(record => {
-        const paidAmount = record.paid_amount || 0;
-        const amount = record.amount || 0;
-
-        // 判斷付款狀態
-        let statusText, statusClass, paidClass = '';
-        let showRefundBtn = false;
-        let showPaidBtn = false;
-
-        if (!record.paid && paidAmount > 0) {
-          // 部分已付（待補）
-          statusText = `待補 $${amount - paidAmount}`;
-          statusClass = 'partial';
-          showPaidBtn = true;  // 可以確認付款
-        } else if (record.paid && record.note && record.note.startsWith('待退')) {
-          // 待退款
-          statusText = record.note;
-          statusClass = 'refund';
-          showRefundBtn = true;
-        } else if (record.paid) {
-          // 已付
-          statusText = '已付';
-          statusClass = 'paid';
-          paidClass = ' paid';
-        } else {
-          // 未付
-          statusText = '未付';
-          statusClass = 'pending';
-          showPaidBtn = true;  // 可以確認付款
-        }
-
-        html += `
-          <div class="payment-item${paidClass}">
-            <div>
-              <span class="payment-user">${record.username}</span>
-              <span class="payment-amount">$${amount}</span>
-              ${record.note && !showRefundBtn ? `<span class="payment-note" title="${record.note}">📝</span>` : ''}
-            </div>
-            <div class="payment-actions">
-              ${showPaidBtn ? `<button class="btn-paid" onclick="confirmPaid('${record.username}')">確認付款</button>` : ''}
-              ${showRefundBtn ? `<button class="btn-refund" onclick="confirmRefund('${record.username}')">確認退款</button>` : ''}
-              <span class="payment-status ${statusClass}">${statusText}</span>
-            </div>
-          </div>
-        `;
-      });
-
-      // 加上付款總覽
-      html += `
-        <div class="payments-summary">
-          <div class="payments-summary-row">
-            <span>已收款</span>
-            <span class="payments-collected">$${payments.total_collected || 0}</span>
-          </div>
-          <div class="payments-summary-row">
-            <span>待收款</span>
-            <span class="payments-pending">$${payments.total_pending || 0}</span>
-          </div>
-        </div>
-      `;
-      content.innerHTML = html;
     }
 
     // === 店家管理面板 ===
@@ -1362,47 +1203,12 @@
       return id;
     }
 
-    // 監聯事件
-    socket.on('order_created', (data) => {
-      // 更新訂單面板
-      if (data.summary) {
-        updateOrdersPanel(data.summary);
-      }
-      // 重新載入付款資料
-      loadAdminData();
-      showNotification(`${data.username} 訂了便當！`);
-      sendBrowserNotification('新訂單', `${data.username} 訂了便當！`, 'order-created');
-    });
-
-    socket.on('order_cancelled', (data) => {
-      // 更新訂單面板
-      if (data.summary) {
-        updateOrdersPanel(data.summary);
-      }
-      // 重新載入付款資料
-      loadAdminData();
-      showNotification(`${data.username} 取消了訂單`);
-      sendBrowserNotification('訂單取消', `${data.username} 取消了訂單`, 'order-cancelled');
-    });
-
-    socket.on('orders_cleared', (data) => {
-      // 清空訂單和付款面板
-      updateOrdersPanel(null);
-      updatePaymentsPanel(null);
-      showNotification('所有訂單已清除');
-    });
-
+    // 監聽事件
     socket.on('store_changed', (data) => {
       const storeName = data.store_name || '新店家';
       // 重新載入管理資料
       loadAdminData();
       showNotification(`今日店家已更新：${storeName}`);
-    });
-
-    socket.on('payment_updated', (data) => {
-      // 重新載入付款資料
-      loadAdminData();
-      showNotification('付款狀態已更新');
     });
 
     // === 群組點餐事件 ===
@@ -1461,56 +1267,6 @@
       if (confirmModalResolve) {
         confirmModalResolve(false);
         confirmModalResolve = null;
-      }
-    }
-
-    // 確認付款
-    async function confirmPaid(targetUsername) {
-      const confirmed = await showConfirmModal(`確定要標記 ${targetUsername} 已付款嗎？`, '💵');
-      if (!confirmed) return;
-
-      try {
-        const res = await fetch('/api/mark-paid', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: targetUsername })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          showNotification(`已確認 ${targetUsername} 付款`);
-          loadAdminData();
-        } else {
-          showNotification(`付款失敗：${data.error}`);
-        }
-      } catch (err) {
-        console.error('付款失敗:', err);
-        showNotification('付款失敗');
-      }
-    }
-
-    // 確認退款
-    async function confirmRefund(targetUsername) {
-      const confirmed = await showConfirmModal(`確定要標記已退款給 ${targetUsername} 嗎？`, '💸');
-      if (!confirmed) return;
-
-      try {
-        const res = await fetch('/api/refund', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: targetUsername })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          showNotification(`已確認退款給 ${targetUsername}`);
-          loadAdminData();
-        } else {
-          showNotification(`退款失敗：${data.error}`);
-        }
-      } catch (err) {
-        console.error('退款失敗:', err);
-        showNotification('退款失敗');
       }
     }
 

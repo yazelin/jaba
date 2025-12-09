@@ -259,22 +259,20 @@
     </div>
   </div>
 
-  <!-- 美食評論區 -->
-  <div class="team-chat" id="team-chat" style="display: none;">
+  <!-- 群組討論區（原美食評論區，現改為顯示選定群組的 LINE 對話） -->
+  <div class="team-chat team-chat-readonly" id="team-chat" style="display: none;">
     <div class="team-chat-header" onclick="toggleTeamChat()">
       <span class="team-chat-title">
-        <span>💬 美食評論區</span>
+        <span id="group-chat-title">💬 請選擇群組</span>
         <span class="unread-badge" id="unread-badge" style="display: none;">0</span>
       </span>
       <button class="team-chat-toggle" id="chat-toggle-btn">▼</button>
     </div>
-    <div class="team-chat-messages" id="team-chat-messages">
-      <!-- 訊息會動態加入這裡 -->
+    <div class="team-chat-messages team-chat-messages-tall" id="team-chat-messages">
+      <!-- 群組對話會動態加入這裡 -->
+      <div class="chat-empty-hint">選擇群組以查看對話記錄</div>
     </div>
-    <div class="team-chat-input">
-      <input type="text" id="team-chat-input" placeholder="輸入訊息..." onkeypress="handleTeamChatKeyPress(event)">
-      <button onclick="sendTeamChatMessage()">發送</button>
-    </div>
+    <!-- 移除輸入框，改為唯讀模式 -->
   </div>
 
   <script>
@@ -663,6 +661,9 @@
     async function loadGroupOrders() {
       const groupId = document.getElementById('group-selector').value;
       selectedGroupId = groupId;
+
+      // 同時載入群組對話
+      loadGroupChat(groupId);
 
       if (!groupId) {
         document.getElementById('orders-content').innerHTML = '<div class="orders-empty">請選擇群組</div>';
@@ -1206,7 +1207,7 @@
 需要建議？問我「今天訂哪家好？」`);
 
           document.getElementById('message-input').focus();
-          loadChatHistory();
+          // 群組對話會在選擇群組時載入，這裡不需要預先載入
         } else {
           errorMsg.textContent = '密碼錯誤';
           errorMsg.style.display = 'block';
@@ -1485,7 +1486,7 @@
       setTimeout(() => notif.remove(), 3000);
     }
 
-    // === 美食評論區 ===
+    // === 群組討論區（顯示選定群組的 LINE 對話） ===
     let teamChatOpen = true;  // 預設展開
     let unreadCount = 0;
 
@@ -1516,77 +1517,87 @@
       }
     }
 
-    function handleTeamChatKeyPress(event) {
-      if (event.key === 'Enter') {
-        sendTeamChatMessage();
+    // 更新群組討論區標題
+    function updateGroupChatTitle(groupName) {
+      const titleEl = document.getElementById('group-chat-title');
+      if (groupName) {
+        titleEl.textContent = `💬 ${groupName} 群組討論`;
+      } else {
+        titleEl.textContent = '💬 請選擇群組';
       }
     }
 
-    async function sendTeamChatMessage() {
-      const input = document.getElementById('team-chat-input');
-      const content = input.value.trim();
-
-      if (!content) return;
-
-      input.value = '';
-
-      try {
-        await fetch('/api/chat/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, content })
-        });
-      } catch (err) {
-        console.error('發送訊息失敗:', err);
-      }
-    }
-
-    function addTeamChatMessage(msg) {
+    // 添加群組對話訊息到討論區
+    function addGroupChatMessage(msg) {
       const messagesEl = document.getElementById('team-chat-messages');
-      const isOwn = msg.username === username;
+
+      // 移除空提示
+      const emptyHint = messagesEl.querySelector('.chat-empty-hint');
+      if (emptyHint) emptyHint.remove();
+
+      const isJaba = msg.role === 'assistant' || msg.username === '呷爸';
 
       const msgEl = document.createElement('div');
-      msgEl.className = `team-chat-message ${isOwn ? 'own' : ''}`;
+      msgEl.className = `team-chat-message ${isJaba ? 'jaba' : ''}`;
 
-      const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+      const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
         hour: '2-digit',
         minute: '2-digit'
-      });
+      }) : '';
 
       msgEl.innerHTML = `
         <div class="team-chat-message-header">
           <span class="team-chat-message-user">${msg.username}</span>
           <span class="team-chat-message-time">${time}</span>
         </div>
-        <div class="team-chat-message-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+        <div class="team-chat-message-content">${(msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       `;
 
       messagesEl.appendChild(msgEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    async function loadChatHistory() {
+    // 載入群組對話記錄
+    async function loadGroupChat(groupId) {
+      const messagesEl = document.getElementById('team-chat-messages');
+
+      if (!groupId) {
+        messagesEl.innerHTML = '<div class="chat-empty-hint">選擇群組以查看對話記錄</div>';
+        updateGroupChatTitle(null);
+        return;
+      }
+
       try {
-        const res = await fetch('/api/chat/messages');
+        const res = await fetch(`/api/super-admin/groups/${groupId}/chat`);
         const data = await res.json();
 
+        // 更新標題
+        const groupName = data.group_name || `群組 ...${groupId.slice(-8)}`;
+        updateGroupChatTitle(groupName);
+
+        // 清空並載入訊息
+        messagesEl.innerHTML = '';
+
         if (data.messages && data.messages.length > 0) {
-          data.messages.forEach(msg => addTeamChatMessage(msg));
+          data.messages.forEach(msg => addGroupChatMessage(msg));
+        } else {
+          messagesEl.innerHTML = '<div class="chat-empty-hint">尚無對話記錄</div>';
         }
       } catch (err) {
-        console.error('載入聊天記錄失敗:', err);
+        console.error('載入群組對話失敗:', err);
+        messagesEl.innerHTML = '<div class="chat-empty-hint">載入失敗</div>';
       }
     }
 
-    socket.on('chat_message', (msg) => {
-      addTeamChatMessage(msg);
-
-      if (msg.username !== username) {
+    // 監聽群組對話更新事件
+    socket.on('group_chat_updated', (data) => {
+      // 只更新當前選中的群組
+      if (data.group_id === selectedGroupId) {
+        addGroupChatMessage(data.message);
         if (!teamChatOpen) {
           unreadCount++;
           updateUnreadBadge();
         }
-        sendBrowserNotification(msg.username, msg.content, `chat-${msg.id}`);
       }
     });
 

@@ -850,3 +850,82 @@ def clear_group_chat_history(group_id: str) -> bool:
         history_file.unlink()
         return True
     return False
+
+
+# === 看板用聚合對話（所有群組）===
+
+def get_board_chat_messages(max_messages: int = 50) -> list[dict]:
+    """取得看板用的所有群組聚合對話（當日）
+
+    Args:
+        max_messages: 最多返回的訊息數量
+
+    Returns:
+        聚合對話列表，每條包含 group_name, username, role, content, timestamp
+    """
+    today = date.today().isoformat()
+    chat_file = DATA_DIR / "daily_chat_messages.json"
+
+    data = read_json(chat_file)
+    if not data or data.get("date") != today:
+        return []
+
+    messages = data.get("messages", [])
+    return messages[-max_messages:]
+
+
+def append_to_board_chat(
+    group_name: str,
+    username: str,
+    role: str,
+    content: str
+) -> dict:
+    """新增一條聚合對話記錄（供看板顯示用）
+
+    Args:
+        group_name: 群組名稱
+        username: 使用者名稱（誰說的）
+        role: 角色（"user" 或 "assistant"）
+        content: 訊息內容
+
+    Returns:
+        新增的訊息物件
+    """
+    today = date.today().isoformat()
+    chat_file = DATA_DIR / "daily_chat_messages.json"
+
+    data = read_json(chat_file)
+
+    # 如果是新的一天或不存在，重新建立
+    if not data or data.get("date") != today:
+        data = {
+            "date": today,
+            "messages": []
+        }
+
+    new_message = {
+        "group_name": group_name,
+        "username": username,
+        "role": role,
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    data["messages"].append(new_message)
+    write_json(chat_file, data)
+
+    return new_message
+
+
+def clear_board_chat() -> bool:
+    """清除看板聚合對話（或讓隔天自動清除）
+
+    Returns:
+        是否成功清除
+    """
+    chat_file = DATA_DIR / "daily_chat_messages.json"
+
+    if chat_file.exists():
+        chat_file.unlink()
+        return True
+    return False

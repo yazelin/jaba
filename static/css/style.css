@@ -208,6 +208,45 @@ body::before {
   color: #999;
 }
 
+/* 群組名稱標籤 */
+.chat-group-name {
+  font-size: 0.85em;
+  color: #666;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+/* 呷爸訊息樣式（看板用） */
+.chat-readonly-message.jaba {
+  background: linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%);
+  border-left: 3px solid #8B6914;
+}
+
+.chat-readonly-message.jaba .chat-readonly-user {
+  color: #8B6914;
+}
+
+/* QRCode 區塊 */
+.qrcode-section {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.qrcode-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.qrcode-hint {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 8px;
+}
+
 .store-name-item {
   font-size: 1em;
   color: #5D4037;
@@ -721,6 +760,39 @@ body::before {
 
 .team-chat-message.own {
   background: #FFF8DC;
+}
+
+/* 呷爸訊息樣式 */
+.team-chat-message.jaba {
+  background: linear-gradient(135deg, #FFF8DC 0%, #FFFACD 100%);
+  border-left: 3px solid #8B6914;
+}
+
+.team-chat-message.jaba .team-chat-message-user {
+  color: #8B6914;
+}
+
+/* 增加高度的討論區 */
+.team-chat-messages-tall {
+  min-height: 350px;
+  max-height: 450px;
+}
+
+/* 唯讀模式（無輸入框） */
+.team-chat-readonly {
+  padding-bottom: 0;
+}
+
+.team-chat-readonly .team-chat-messages {
+  border-radius: 0 0 15px 15px;
+}
+
+/* 空提示樣式 */
+.chat-empty-hint {
+  text-align: center;
+  color: #999;
+  padding: 40px 20px;
+  font-size: 0.9em;
 }
 
 .team-chat-message-header {

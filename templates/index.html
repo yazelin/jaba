@@ -63,7 +63,10 @@
           </div>
 
           <div class="buttons">
-            <a href="/order" class="btn btn-primary">🍱 我要訂便當</a>
+            <div class="qrcode-section">
+              <img src="/static/images/588voelu.png" alt="加入呷爸好友" class="qrcode-image">
+              <p class="qrcode-hint">掃碼加入呷爸好友</p>
+            </div>
             <a href="/manager" class="btn btn-secondary">⚙️ 管理員</a>
           </div>
         </div>
@@ -255,18 +258,18 @@
       loadData();
     });
 
-    // === 聊天訊息（唯讀）===
-    async function loadChatMessages() {
+    // === 美食評論區（顯示所有群組對話）===
+    async function loadBoardChat() {
       try {
-        const res = await fetch('/api/chat/messages');
+        const res = await fetch('/api/board/chat');
         const data = await res.json();
-        updateChatDisplay(data.messages || []);
+        updateBoardChatDisplay(data.messages || []);
       } catch (err) {
-        console.error('載入聊天訊息失敗:', err);
+        console.error('載入群組對話失敗:', err);
       }
     }
 
-    function updateChatDisplay(messages) {
+    function updateBoardChatDisplay(messages) {
       const chatEl = document.getElementById('chat-readonly');
 
       if (!messages || messages.length === 0) {
@@ -274,18 +277,23 @@
         return;
       }
 
-      // 只顯示最近 10 則訊息
-      const recentMessages = messages.slice(-10);
+      // 只顯示最近 15 則訊息
+      const recentMessages = messages.slice(-15);
 
       chatEl.innerHTML = recentMessages.map(msg => {
-        const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+        const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
           hour: '2-digit',
           minute: '2-digit'
-        });
+        }) : '';
+        const isJaba = msg.role === 'assistant' || msg.username === '呷爸';
+        const jabaClass = isJaba ? ' jaba' : '';
+        // 顯示格式：[群組名稱] 使用者: 內容
+        const groupPrefix = msg.group_name ? `<span class="chat-group-name">[${msg.group_name}]</span> ` : '';
+        const content = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return `
-          <div class="chat-readonly-message">
-            <span class="chat-readonly-user">${msg.username}</span>
-            <span class="chat-readonly-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+          <div class="chat-readonly-message${jabaClass}">
+            ${groupPrefix}<span class="chat-readonly-user">${msg.username}</span>
+            <span class="chat-readonly-content">${content}</span>
             <span class="chat-readonly-time">${time}</span>
           </div>
         `;
@@ -295,7 +303,7 @@
       chatEl.scrollTop = chatEl.scrollHeight;
     }
 
-    function addChatMessage(msg) {
+    function addBoardChatMessage(msg) {
       const chatEl = document.getElementById('chat-readonly');
 
       // 如果是空狀態，清空
@@ -303,22 +311,26 @@
         chatEl.innerHTML = '';
       }
 
-      const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
+      const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-TW', {
         hour: '2-digit',
         minute: '2-digit'
-      });
+      }) : new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+      const isJaba = msg.role === 'assistant' || msg.username === '呷爸';
+      const jabaClass = isJaba ? ' jaba' : '';
+      const groupPrefix = msg.group_name ? `<span class="chat-group-name">[${msg.group_name}]</span> ` : '';
+      const content = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       const msgEl = document.createElement('div');
-      msgEl.className = 'chat-readonly-message';
+      msgEl.className = 'chat-readonly-message' + jabaClass;
       msgEl.innerHTML = `
-        <span class="chat-readonly-user">${msg.username}</span>
-        <span class="chat-readonly-content">${msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+        ${groupPrefix}<span class="chat-readonly-user">${msg.username}</span>
+        <span class="chat-readonly-content">${content}</span>
         <span class="chat-readonly-time">${time}</span>
       `;
       chatEl.appendChild(msgEl);
 
-      // 只保留最近 10 則
-      while (chatEl.children.length > 10) {
+      // 只保留最近 15 則
+      while (chatEl.children.length > 15) {
         chatEl.removeChild(chatEl.firstChild);
       }
 
@@ -326,14 +338,14 @@
       chatEl.scrollTop = chatEl.scrollHeight;
     }
 
-    // 監聽新聊天訊息
-    socket.on('chat_message', (msg) => {
-      addChatMessage(msg);
+    // 監聯看板聊天訊息（所有群組對話）
+    socket.on('board_chat_message', (msg) => {
+      addBoardChatMessage(msg);
     });
 
     // 初始載入
     loadData();
-    loadChatMessages();
+    loadBoardChat();
 
     // 每 30 秒自動刷新
     setInterval(loadData, 30000);

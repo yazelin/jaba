@@ -261,17 +261,59 @@ async def chat(request: Request):
 
     # 判斷是否為群組點餐模式
     group_ordering = False
+    group_name = None
     if group_id and is_group_ordering(group_id):
         group_ordering = True
+        # 取得群組名稱（從 whitelist）
+        whitelist = get_linebot_whitelist()
+        group_info = next((g for g in whitelist.get("groups", []) if g["id"] == group_id), None)
+        if group_info:
+            group_name = group_info.get("name") or f"群組 ...{group_id[-8:]}"
 
     # 呼叫 AI（非同步，不阻塞其他請求）
     response = await ai.call_ai(
         username, message, is_manager, group_ordering, group_id,
         line_user_id if group_ordering else None,
-        display_name if group_ordering else None
+        display_name if group_ordering else None,
+        group_name if group_ordering else None
     )
 
     t_ai_done = time.time()
+
+    # 廣播群組對話更新事件（Socket.IO）
+    if group_ordering and group_id and group_name:
+        ai_message = response.get("message", "")
+        # 廣播使用者訊息
+        await broadcast_event("board_chat_message", {
+            "group_name": group_name,
+            "username": username,
+            "role": "user",
+            "content": message
+        })
+        await broadcast_event("group_chat_updated", {
+            "group_id": group_id,
+            "message": {
+                "username": username,
+                "role": "user",
+                "content": message
+            }
+        })
+        # 廣播呷爸回覆
+        if ai_message:
+            await broadcast_event("board_chat_message", {
+                "group_name": group_name,
+                "username": "呷爸",
+                "role": "assistant",
+                "content": ai_message
+            })
+            await broadcast_event("group_chat_updated", {
+                "group_id": group_id,
+                "message": {
+                    "username": "呷爸",
+                    "role": "assistant",
+                    "content": ai_message
+                }
+            })
 
     # 執行動作
     actions = response.get("actions", [])
@@ -344,6 +386,13 @@ async def chat(request: Request):
 async def get_chat_messages():
     """取得今日聊天記錄"""
     messages = data.get_chat_messages()
+    return {"messages": messages}
+
+
+@app.get("/api/board/chat")
+async def get_board_chat():
+    """取得看板用的所有群組聚合對話（當日）"""
+    messages = data.get_board_chat_messages(max_messages=50)
     return {"messages": messages}
 
 
@@ -1219,6 +1268,35 @@ async def super_admin_get_group_orders(group_id: str):
             "paid_amount": paid_amount,
             "pending_amount": total_amount - paid_amount
         }
+    }
+
+
+@app.get("/api/super-admin/groups/{group_id}/chat")
+async def super_admin_get_group_chat(group_id: str):
+    """取得指定群組的對話記錄（超級管理員用）
+
+    回傳格式：
+    {
+        "group_id": "Cxxxxxxxxxxxxxxxxx",
+        "group_name": "午餐群組",
+        "messages": [
+            {"username": "林亞澤", "role": "user", "content": "我要雞腿便當", "timestamp": "..."},
+            {"username": "呷爸", "role": "assistant", "content": "好喔...", "timestamp": "..."}
+        ]
+    }
+    """
+    # 取得群組名稱
+    whitelist = get_linebot_whitelist()
+    group_info = next((g for g in whitelist.get("groups", []) if g["id"] == group_id), None)
+    group_name = group_info.get("name", "") if group_info else ""
+
+    # 取得對話記錄
+    messages = data.get_group_chat_history(group_id, max_messages=50)
+
+    return {
+        "group_id": group_id,
+        "group_name": group_name,
+        "messages": messages
     }
 
 

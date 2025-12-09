@@ -220,7 +220,8 @@ async def call_ai(
     group_ordering: bool = False,
     group_id: str | None = None,
     line_user_id: str | None = None,
-    display_name: str | None = None
+    display_name: str | None = None,
+    group_name: str | None = None
 ) -> dict:
     """呼叫 AI CLI（支援多種 Provider）
 
@@ -236,6 +237,7 @@ async def call_ai(
         group_id: 群組 ID
         line_user_id: LINE User ID（群組點餐時傳入）
         display_name: LINE 顯示名稱（群組點餐時傳入）
+        group_name: 群組名稱（群組點餐時傳入，用於看板聚合對話）
     """
     timings = {}
     t_start = time.time()
@@ -309,6 +311,9 @@ async def call_ai(
     # 先儲存使用者訊息到歷史
     if group_ordering and group_id:
         data.append_group_chat_history(group_id, username, "user", message)
+        # 同時儲存到看板聚合對話
+        if group_name:
+            data.append_to_board_chat(group_name, username, "user", message)
     else:
         data.append_ai_chat_history(username, "user", message, is_manager)
 
@@ -343,6 +348,9 @@ async def call_ai(
         if ai_message:
             if group_ordering and group_id:
                 data.append_group_chat_history(group_id, username, "assistant", ai_message)
+                # 同時儲存到看板聚合對話（呷爸回覆）
+                if group_name:
+                    data.append_to_board_chat(group_name, "呷爸", "assistant", ai_message)
             else:
                 data.append_ai_chat_history(username, "assistant", ai_message, is_manager)
 

@@ -63,8 +63,6 @@ AI 午餐訂便當系統 - 透過 LINE 群組輕鬆訂餐
 
 上傳菜單圖片後，AI 自動辨識並顯示差異預覽：綠色為新增、黃色為修改、紅色為可刪除。
 
-> 完整 Demo 流程請參考 [demo/DEMO.md](demo/DEMO.md)
-
 ## 技術架構
 
 ![系統架構圖](demo/system-architecture.png)
@@ -160,8 +158,9 @@ jaba/
 │       ├── linebot_whitelist.json  # LINE Bot 白名單
 │       └── prompts/        # AI 提示詞
 ├── templates/              # HTML 頁面
-│   ├── index.html          # 看板頁
+│   ├── index.html          # 今日看板頁
 │   └── manager.html        # 超級管理員頁
+├── demo/                   # Demo 截圖
 ├── static/                 # 靜態資源
 │   ├── css/style.css
 │   └── images/

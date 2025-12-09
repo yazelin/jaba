@@ -159,9 +159,9 @@
 - **THEN** 顯示品項統計列表
 - **AND** 每個品項顯示名稱和總數量
 
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: 使用者識別（修改自 user-management）
+### Requirement: 使用者識別
 系統 SHALL 使用 LINE User ID 作為使用者唯一識別，profile.json 中記錄 display_name 作為顯示名稱。
 
 #### Scenario: 建立 LINE 使用者

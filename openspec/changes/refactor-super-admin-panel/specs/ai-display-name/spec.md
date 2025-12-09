@@ -3,7 +3,7 @@
 ## Purpose
 確保 AI 在與使用者對話時使用 display_name（LINE 顯示名稱）而非 LINE User ID。
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: AI 對話使用 display_name（修改自 ai-integration）
 AI 對話系統 SHALL 使用使用者的 display_name 作為對話中的稱呼，而非 LINE User ID。

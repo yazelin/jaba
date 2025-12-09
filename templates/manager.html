@@ -648,7 +648,9 @@
 
       allGroups.forEach(group => {
         const selected = group.id === selectedGroupId ? 'selected' : '';
-        html += `<option value="${group.id}" ${selected}>${group.name} (${group.member_count}人)</option>`;
+        // 如果沒有群組名稱，顯示 ID 的後 8 碼
+        const displayName = group.name || `群組 ...${group.id.slice(-8)}`;
+        html += `<option value="${group.id}" ${selected}>${displayName} (${group.member_count}人)</option>`;
       });
 
       if (allGroups.length === 0) {

@@ -1406,11 +1406,19 @@ async def linebot_register(request: Request):
         # 檢查是否已註冊
         existing = next((u for u in whitelist["users"] if u["id"] == id_value), None)
         if existing:
+            # 更新名稱（如果有提供）
+            if name and name != existing.get("name"):
+                existing["name"] = name
+                save_linebot_whitelist(whitelist)
             return {"success": True, "message": "已經註冊過了", "already_registered": True}
         whitelist["users"].append(entry)
     elif id_type == "group":
         existing = next((g for g in whitelist["groups"] if g["id"] == id_value), None)
         if existing:
+            # 更新群組名稱（如果有提供）
+            if name and name != existing.get("name"):
+                existing["name"] = name
+                save_linebot_whitelist(whitelist)
             return {"success": True, "message": "此群組已經註冊過了", "already_registered": True}
         whitelist["groups"].append(entry)
     else:

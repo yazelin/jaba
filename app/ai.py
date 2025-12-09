@@ -12,13 +12,20 @@ from . import data
 from .providers import get_provider
 
 
-def get_system_prompt(is_manager: bool = False, group_ordering: bool = False) -> str:
+def get_system_prompt(is_manager: bool = False, group_ordering: bool = False, personal_mode: bool = False) -> str:
     """取得系統提示詞"""
     prompt_data = data.get_jaba_prompt()
 
     if group_ordering:
         # 群組點餐模式：載入 group_ordering_prompt
         base_prompt = prompt_data.get("group_ordering_prompt", "")
+        return f"""{base_prompt}
+
+請用繁體中文回應。"""
+
+    if personal_mode:
+        # 個人偏好設定模式：載入 personal_prompt
+        base_prompt = prompt_data.get("personal_prompt", "")
         return f"""{base_prompt}
 
 請用繁體中文回應。"""
@@ -37,7 +44,8 @@ def build_context(
     group_id: str | None = None,
     session_orders: list | None = None,
     line_user_id: str | None = None,
-    display_name: str | None = None
+    display_name: str | None = None,
+    personal_mode: bool = False
 ) -> dict:
     """建立 AI 上下文
 
@@ -49,9 +57,32 @@ def build_context(
         session_orders: 群組訂單列表
         line_user_id: LINE User ID（群組點餐時用於查詢使用者 profile）
         display_name: LINE 顯示名稱（群組點餐時作為 username 傳給 AI）
+        personal_mode: 是否為個人偏好設定模式
     """
     today_info = data.get_today_info()
     today_stores = today_info.get("stores", [])
+
+    # 個人偏好設定模式（僅提供使用者偏好資訊，不提供菜單和訂單）
+    if personal_mode:
+        # 使用 line_user_id 查詢使用者 profile
+        profile = None
+        if line_user_id:
+            profile = data.get_user_by_line_id(line_user_id)
+        if not profile:
+            profile = data.get_user_profile(username)
+
+        user_profile = {}
+        preferred_name = None
+        if profile:
+            user_profile = profile.get("preferences", {})
+            preferred_name = user_profile.get("preferred_name")
+
+        return {
+            "mode": "personal_preferences",
+            "username": display_name or username,
+            "preferred_name": preferred_name,
+            "user_profile": user_profile,
+        }
 
     # 群組點餐模式
     if group_ordering:
@@ -214,7 +245,8 @@ async def call_ai(
     group_id: str | None = None,
     line_user_id: str | None = None,
     display_name: str | None = None,
-    group_name: str | None = None
+    group_name: str | None = None,
+    personal_mode: bool = False
 ) -> dict:
     """呼叫 AI CLI（支援多種 Provider）
 
@@ -231,6 +263,7 @@ async def call_ai(
         line_user_id: LINE User ID（群組點餐時傳入）
         display_name: LINE 顯示名稱（群組點餐時傳入）
         group_name: 群組名稱（群組點餐時傳入，用於看板聚合對話）
+        personal_mode: 是否為個人偏好設定模式
     """
     timings = {}
     t_start = time.time()
@@ -271,10 +304,10 @@ async def call_ai(
         if session:
             session_orders = session.get("orders", [])
 
-    system_prompt = get_system_prompt(is_manager, group_ordering)
+    system_prompt = get_system_prompt(is_manager, group_ordering, personal_mode)
     context = build_context(
         username, is_manager, group_ordering, group_id, session_orders,
-        line_user_id, display_name
+        line_user_id, display_name, personal_mode
     )
 
     # 組合完整訊息（包含對話歷史）
@@ -593,7 +626,8 @@ def execute_actions(
     is_manager: bool = False,
     group_id: str | None = None,
     line_user_id: str | None = None,
-    display_name: str | None = None
+    display_name: str | None = None,
+    personal_mode: bool = False
 ) -> list:
     """執行多個 AI 請求的動作，回傳結果陣列
 
@@ -604,13 +638,14 @@ def execute_actions(
         group_id: 群組 ID（群組點餐時傳入）
         line_user_id: LINE User ID（群組點餐時傳入）
         display_name: LINE 顯示名稱（群組點餐時傳入）
+        personal_mode: 是否為個人偏好設定模式
     """
     if not actions:
         return []
 
     results = []
     for action in actions:
-        result = execute_action(username, action, is_manager, group_id, line_user_id, display_name)
+        result = execute_action(username, action, is_manager, group_id, line_user_id, display_name, personal_mode)
         results.append(result)
     return results
 
@@ -621,7 +656,8 @@ def execute_action(
     is_manager: bool = False,
     group_id: str | None = None,
     line_user_id: str | None = None,
-    display_name: str | None = None
+    display_name: str | None = None,
+    personal_mode: bool = False
 ) -> dict:
     """執行單一 AI 請求的動作
 
@@ -632,6 +668,7 @@ def execute_action(
         group_id: 群組 ID（群組點餐時傳入）
         line_user_id: LINE User ID（群組點餐時傳入）
         display_name: LINE 顯示名稱（群組點餐時傳入）
+        personal_mode: 是否為個人偏好設定模式
     """
     if not action:
         return {"success": True}
@@ -642,6 +679,14 @@ def execute_action(
     # 群組點餐使用 line_user_id，否則回退到 username
     user_id = line_user_id or username
     user_display = display_name or username
+
+    # 個人偏好設定模式：只允許 update_user_profile 動作
+    if personal_mode and action_type != "update_user_profile":
+        return {
+            "success": False,
+            "error": "個人模式只支援偏好設定功能",
+            "message": "要點餐請加入 LINE 群組喔！"
+        }
 
     try:
         # 群組訂單操作（獨立於個人訂單）
@@ -698,7 +743,8 @@ def execute_action(
         elif action_type == "reset_session":
             return _reset_session(username, is_manager)
         elif action_type == "update_user_profile":
-            return _update_user_profile(username, action_data)
+            # 群組模式下使用 line_user_id，否則使用 username
+            return _update_user_profile(user_id, action_data)
         elif action_type == "remove_item":
             return _remove_item(username, action_data)
         else:

@@ -169,9 +169,8 @@ async def chat(request: Request):
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
 
-    # 個人訂餐模式已移除，僅支援群組點餐和管理員模式
-    if not group_id and not is_manager:
-        return JSONResponse({"error": "個人訂餐功能已移除，請透過 LINE 群組點餐"}, status_code=400)
+    # 判斷是否為個人偏好設定模式（非群組、非管理員）
+    personal_mode = not group_id and not is_manager
 
     # 處理群組點餐指令
     message_lower = message.strip().lower()
@@ -261,9 +260,10 @@ async def chat(request: Request):
     # 呼叫 AI（非同步，不阻塞其他請求）
     response = await ai.call_ai(
         username, message, is_manager, group_ordering, group_id,
-        line_user_id if group_ordering else None,
-        display_name if group_ordering else None,
-        group_name if group_ordering else None
+        line_user_id if (group_ordering or personal_mode) else None,
+        display_name if (group_ordering or personal_mode) else None,
+        group_name if group_ordering else None,
+        personal_mode
     )
 
     t_ai_done = time.time()
@@ -309,11 +309,13 @@ async def chat(request: Request):
 
     if actions:
         # 群組模式傳入 group_id 和使用者資訊，讓 execute_actions 處理群組訂單
+        # 個人模式傳入 line_user_id 以便更新偏好設定
         action_results = ai.execute_actions(
             username, actions, is_manager,
             group_id if group_ordering else None,
-            line_user_id if group_ordering else None,
-            display_name if group_ordering else None
+            line_user_id if (group_ordering or personal_mode) else None,
+            display_name if (group_ordering or personal_mode) else None,
+            personal_mode
         )
 
         # 廣播每個動作的事件

@@ -1,68 +1,61 @@
 # jaba (呷爸)
 
-AI 午餐訂便當系統 - 用自然語言輕鬆訂餐
+AI 午餐訂便當系統 - 透過 LINE 群組輕鬆訂餐
 
-呷爸是一個專為團隊設計的午餐訂餐系統，透過 AI 對話介面讓訂餐變得簡單直覺。使用者只需用自然語言告訴呷爸想吃什麼，系統就會自動處理訂單。
+呷爸是一個專為團隊設計的午餐訂餐系統，透過 LINE Bot 讓群組點餐變得簡單直覺。使用者只需在 LINE 群組中用自然語言告訴呷爸想吃什麼，系統就會自動處理訂單。
 
 ## 功能特色
 
-### 使用者功能
-- **AI 對話訂餐** - 用自然語言與 AI 互動，說「我要點雞腿便當」就能完成訂餐
-- **快速點餐** - 點擊菜單項目直接加入訂單
+### LINE 群組點餐
+- **群組點餐 Session** - 群組專屬點餐流程，說「開單」開始、「收單」結束
+- **AI 對話訂餐** - 用自然語言與 AI 互動，說「我要雞腿便當」就能完成訂餐
+- **共享對話歷史** - AI 可理解跟單（+1）等上下文
 - **多店家選擇** - 當天有多家店時，可自由選擇想訂的店家
 - **訂單修改** - 可新增、移除品項或取消訂單
+- **飲料縮寫辨識** - 支援「微微」「少少」「半半」等常見點法
+- **自動過濾** - AI 自動辨識訂餐訊息，忽略閒聊
 - **特價優惠** - 自動套用促銷折扣（買一送一、第二杯折扣、限時特價）
 - **卡路里估算** - AI 自動估算餐點熱量
-- **個人偏好** - 記住你的稱呼和飲食偏好
+- **個人偏好** - 透過對話記住你的稱呼和飲食偏好（如「我不吃辣」）
 
-### 管理員功能
+### 超級管理員功能
+- **群組管理** - 管理多個 LINE 群組的訂單
+- **群組選擇器** - 切換不同群組查看訂單
+- **訂單 CRUD** - 編輯、刪除使用者訂單
+- **代理點餐** - 代替群組成員新增訂單
+- **付款追蹤** - 標記付款狀態、處理退款
 - **店家管理** - 新增、編輯、啟用/停用店家
 - **菜單辨識** - 上傳菜單圖片，AI 自動辨識並建立菜單
 - **差異預覽** - 辨識後顯示新增/修改/可刪除項目，選擇性套用變更
 - **特價辨識** - 自動識別促銷標示（買一送一、第二杯折扣、限時特價）
 - **菜單編輯** - 手動調整品項名稱、價格、尺寸變體
 - **今日設定** - 設定單一或多家今日營業店家
-- **訂單總覽** - 即時查看所有訂單與品項統計
-- **付款追蹤** - 標記付款狀態、處理退款
 - **歷史清理** - 清除過期訂單資料
 
 ### 系統功能
 - **即時同步** - Socket.IO 即時廣播訂單與狀態變更
-- **瀏覽器通知** - 新訂單、訊息即時推播通知
-- **團體聊天** - 內建即時聊天室方便同事溝通
+- **看板頁面** - 顯示所有群組訂單、美食評論區、LINE QRCode
+- **美食評論區** - 顯示 LINE 群組中的點餐對話
 - **Session 管理** - 每日對話紀錄自動管理
-
-### LINE Bot 群組點餐
-- **群組點餐 Session** - 群組專屬點餐流程，訂單獨立於個人訂單
-- **共享對話歷史** - AI 可理解跟單（+1）等上下文
-- **飲料縮寫辨識** - 支援「微微」「少少」「半半」等常見點法
-- **自動過濾** - AI 自動辨識訂餐訊息，忽略閒聊
 
 ## 系統畫面
 
 | 頁面 | 說明 |
 |------|------|
-| `/` | 今日訂餐看板 - 顯示店家、訂單列表、品項統計 |
-| `/order` | 訂餐頁面 - AI 對話、菜單瀏覽、快速點餐 |
-| `/manager` | 管理頁面 - 店家管理、訂單總覽、付款追蹤 |
+| `/` | 今日訂餐看板 - 顯示群組訂單、美食評論區、LINE QRCode |
+| `/manager` | 超級管理員頁面 - 群組訂單管理、店家管理、付款追蹤 |
 
 ### 今日看板
 
 ![今日看板](demo/03-dashboard-summary.png)
 
-顯示今日店家、訂單列表與品項統計，方便團隊查看訂餐狀況。
+顯示所有群組的訂單、美食評論區（LINE 群組對話）、LINE QRCode 方便加入呷爸好友。
 
-### 訂餐頁面
-
-![訂餐頁對話介面](demo/01-order-page-chat.png)
-
-左側為菜單、中間為 AI 對話區、右側為訂單摘要與聊天室。
-
-### 管理頁面
+### 超級管理員頁面
 
 ![管理頁總覽](demo/02-manager-page-overview.png)
 
-管理員可透過對話設定店家、查看訂單、標記付款狀態。
+管理員可選擇群組、查看訂單、代理點餐、標記付款狀態。
 
 ### 菜單辨識與差異預覽
 
@@ -107,28 +100,31 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 
 ## 使用指南
 
-### 一般使用者
+### LINE 群組點餐
 
-![使用者訂餐流程](demo/user-ordering-flow.png)
+1. 將呷爸 LINE Bot 加入群組
+2. 發送「啟用」讓呷爸加入白名單
+3. 點餐流程：
+   - 發送「開單」開始群組點餐
+   - 與呷爸對話，例如：
+     - 「我要雞腿便當」
+     - 「+1」（跟單上一個人的餐點）
+     - 「不要了」（取消自己的訂單）
+     - 「珍奶 微微 L」（飲料縮寫）
+   - 發送「收單」結束點餐並顯示統計
 
-1. 開啟訂餐頁 `/order`
-2. 輸入你的名字開始訂餐
-3. 與呷爸對話，例如：
-   - 「我要點雞腿便當」
-   - 「幫我加一碗湯」
-   - 「不要了，取消訂單」
-   - 「今天吃什麼好？」
-4. 或直接點擊左側菜單快速加入
-
-### 管理員
+### 超級管理員
 
 1. 開啟管理頁 `/manager`
 2. 輸入管理員密碼登入（預設：`9898`）
 3. 可執行的操作：
-   - 「今天吃佳香味」- 設定今日店家
-   - 「新增店家 xxx」- 建立新店家
-   - 「小明已付款」- 標記付款
-   - 「清除所有訂單」- 重置今日訂單
+   - 選擇群組查看訂單
+   - 編輯、刪除使用者訂單
+   - 代理點餐
+   - 標記付款狀態
+   - 透過 AI 對話設定店家：
+     - 「今天吃佳香味」- 設定今日店家
+     - 「新增店家 xxx」- 建立新店家
 4. 上傳菜單圖片讓 AI 自動建立菜單
 
 ## 專案結構
@@ -149,25 +145,22 @@ jaba/
 │   │       ├── info.json   # 店家資訊
 │   │       ├── menu.json   # 菜單
 │   │       └── images/     # 菜品圖片
-│   ├── orders/             # 每日訂單彙整
-│   │   └── {date}/
-│   │       ├── summary.json
-│   │       └── payments.json
-│   ├── users/              # 使用者資料
-│   │   └── {username}/
-│   │       ├── profile.json
-│   │       ├── orders/     # 個人訂單
-│   │       └── sessions/   # 對話 session
-│   ├── chat/               # 聊天記錄
+│   ├── groups/             # LINE 群組資料
+│   │   └── {group_id}/
+│   │       └── session.json  # 群組點餐 session
+│   ├── users/              # 使用者資料（以 LINE User ID 為識別）
+│   │   └── {line_user_id}/
+│   │       └── profile.json  # 使用者偏好
+│   ├── board_chat/         # 看板聊天記錄（聚合群組對話）
 │   └── system/             # 系統設定
 │       ├── config.json     # 系統配置
 │       ├── today.json      # 今日店家
 │       ├── ai_config.json  # AI 模型設定
+│       ├── linebot_whitelist.json  # LINE Bot 白名單
 │       └── prompts/        # AI 提示詞
 ├── templates/              # HTML 頁面
 │   ├── index.html          # 看板頁
-│   ├── order.html          # 訂餐頁
-│   └── manager.html        # 管理頁
+│   └── manager.html        # 超級管理員頁
 ├── static/                 # 靜態資源
 │   ├── css/style.css
 │   └── images/
@@ -210,23 +203,28 @@ jaba/
 
 | 方法 | 路徑 | 說明 |
 |------|------|------|
-| GET | `/api/today` | 取得今日店家與訂單資訊 |
+| GET | `/api/today` | 取得今日店家資訊 |
 | GET | `/api/stores` | 取得啟用的店家列表 |
 | GET | `/api/menu/{store_id}` | 取得店家菜單 |
-| POST | `/api/chat` | 與 AI 對話（訂餐/管理） |
-| GET | `/api/chat/messages` | 取得今日聊天記錄 |
-| POST | `/api/chat/send` | 發送聊天訊息 |
+| POST | `/api/chat` | 與 AI 對話（群組點餐/管理員模式） |
+| GET | `/api/board/chat` | 取得看板用的聚合群組對話 |
+| GET | `/api/board/orders` | 取得看板用的所有群組訂單 |
 
-### 管理 API
+### 超級管理員 API
 
 | 方法 | 路徑 | 說明 |
 |------|------|------|
 | POST | `/api/verify-admin` | 驗證管理員密碼 |
+| GET | `/api/super-admin/groups` | 取得所有已啟用群組 |
+| GET | `/api/super-admin/groups/{group_id}/orders` | 取得群組訂單 |
+| POST | `/api/super-admin/groups/{group_id}/orders` | 代理點餐 |
+| PUT | `/api/super-admin/groups/{group_id}/orders/{user_id}` | 修改訂單 |
+| DELETE | `/api/super-admin/groups/{group_id}/orders/{user_id}` | 刪除訂單 |
+| POST | `/api/super-admin/groups/{group_id}/payments/{user_id}/mark-paid` | 標記已付款 |
+| POST | `/api/super-admin/groups/{group_id}/payments/{user_id}/refund` | 標記已退款 |
 | GET | `/api/stores/all` | 取得所有店家與菜單 |
 | POST | `/api/recognize-menu` | AI 辨識菜單圖片（含差異比對） |
 | POST | `/api/save-menu` | 儲存菜單（支援差異模式） |
-| POST | `/api/mark-paid` | 標記已付款 |
-| POST | `/api/refund` | 標記已退款 |
 
 ### LINE Bot API
 
@@ -241,13 +239,13 @@ jaba/
 
 | 事件 | 說明 |
 |------|------|
-| `order_created` | 新訂單建立 |
-| `order_updated` | 訂單更新 |
-| `order_cancelled` | 訂單取消 |
-| `orders_cleared` | 訂單清除 |
+| `group_session_started` | 群組點餐開始 |
+| `group_order_updated` | 群組訂單更新 |
+| `group_session_ended` | 群組點餐結束 |
+| `group_chat_updated` | 群組對話更新 |
+| `board_chat_message` | 看板聊天訊息 |
 | `store_changed` | 今日店家變更 |
 | `payment_updated` | 付款狀態更新 |
-| `chat_message` | 新聊天訊息 |
 
 ## 開發指南
 
@@ -261,9 +259,8 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 ### 自訂 AI 提示詞
 
 編輯 `data/system/prompts/` 目錄下的檔案：
-- `user_prompt.md` - 使用者對話提示詞（個人點餐）
 - `manager_prompt.md` - 管理員對話提示詞
-- `group_ordering_prompt.md` - 群組點餐提示詞
+- `group_ordering_prompt.md` - LINE 群組點餐提示詞
 - `menu_recognition_prompt.md` - 菜單辨識提示詞
 
 ## AI Prompt Context 架構
@@ -289,7 +286,7 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 │     └─ JSON: 今日店家、菜單、使用者偏好、目前訂單       │
 ├─────────────────────────────────────────────────────────┤
 │  Layer 1 (Base): 系統提示詞 (System Prompt)             │
-│     └─ user_prompt.md 或 manager_prompt.md              │
+│     └─ group_ordering_prompt.md 或 manager_prompt.md    │
 └─────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -307,7 +304,7 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 
 | 模式 | 檔案 | 內容 |
 |------|------|------|
-| 使用者模式 | `user_prompt.md` | 訂餐助手角色、訂單操作動作 |
+| 群組點餐模式 | `group_ordering_prompt.md` | LINE 群組訂餐助手角色、訂單操作動作 |
 | 管理員模式 | `manager_prompt.md` | 管理助手角色、店家/訂單管理動作 |
 
 ### 2. 動態上下文
@@ -319,17 +316,18 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 {
   "today": "2025-12-08",
   "today_stores": [{"store_id": "coco", "store_name": "CoCo都可茶飲"}],
-  "username": "小明",
-  "preferred_name": "阿明",
   "menus": { "coco": { "name": "CoCo都可茶飲", "menu": {...} } }
 }
 ```
 
-**使用者模式額外欄位：**
+**群組點餐模式額外欄位：**
 ```json
 {
-  "user_profile": { "dietary_restrictions": ["不吃辣"], "allergies": [] },
-  "current_orders": [{ "order_id": "...", "items": [...], "total": 50 }]
+  "group_id": "C1234567890",
+  "group_name": "午餐群",
+  "session_active": true,
+  "group_orders": [{ "user_id": "U123", "display_name": "小明", "items": [...], "total": 50 }],
+  "chat_history": [{ "role": "user", "name": "小明", "content": "我要雞腿便當" }]
 }
 ```
 
@@ -345,13 +343,17 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 
 ### 3. 對話歷史
 
-系統自動維護每位使用者的對話歷史（最多 20 條），格式：
+系統自動維護對話歷史，格式依模式不同：
 
+**群組點餐模式** - 群組 session 內的對話記錄：
 ```
-使用者: 我要點珍珠奶茶
-助手: 好的，已經幫你點了珍珠奶茶 M 杯 $50，今天想喝點什麼配嗎？
-使用者: 再加一杯紅茶拿鐵
+小明: 我要點珍珠奶茶
+呷爸: 好的，已經幫小明點了珍珠奶茶 M 杯 $50！
+小華: +1
+呷爸: 好的，已經幫小華跟單珍珠奶茶 M 杯 $50！
 ```
+
+**管理員模式** - 管理員 session 內的對話記錄（最多 20 條）
 
 ### 4. 完整訊息組合
 

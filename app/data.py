@@ -147,6 +147,10 @@ def get_jaba_prompt() -> dict:
     if group_ordering_file.exists():
         result["group_ordering_prompt"] = group_ordering_file.read_text(encoding="utf-8")
 
+    personal_file = prompts_dir / "personal_prompt.md"
+    if personal_file.exists():
+        result["personal_prompt"] = personal_file.read_text(encoding="utf-8")
+
     return result
 
 
@@ -371,7 +375,7 @@ def update_user_profile_by_line_id(line_user_id: str, updates: dict) -> dict:
 
     # 更新 preferences 中的欄位
     for key, value in updates.items():
-        if key in ["dietary_restrictions", "allergies", "drink_preferences", "notes"]:
+        if key in ["preferred_name", "dietary_restrictions", "allergies", "drink_preferences", "notes"]:
             profile["preferences"][key] = value
 
     # 儲存更新後的 profile

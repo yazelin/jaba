@@ -2,10 +2,10 @@
 
 管理員介面的群組討論區功能。
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: 群組討論區標題
-系統 SHALL 將原「美食評論區」標題改為動態顯示選定群組名稱。
+系統 SHALL 動態顯示選定群組名稱作為討論區標題。
 
 #### Scenario: 選擇群組後標題更新
 - Given 管理員已登入管理介面
@@ -57,18 +57,14 @@
 - When 「下午茶群」有新對話
 - Then 「午餐群」討論區不更新
 
-## REMOVED Requirements
-
-### Requirement: 移除發送訊息功能
-原美食評論區的訊息發送功能移除。
+### Requirement: 唯讀模式
+系統 SHALL 將討論區設為唯讀模式，不提供發送功能。
 
 #### Scenario: 無輸入框
 - Given 管理員已登入管理介面
 - When 查看群組討論區
 - Then 不顯示訊息輸入框
 - And 不顯示發送按鈕
-
-## ADDED Requirements
 
 ### Requirement: 增加顯示高度
 系統 SHALL 增加討論區 UI 高度，以顯示更多對話訊息。

@@ -2,10 +2,10 @@
 
 看板頁面的美食評論區功能，顯示所有群組對話。
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: 顯示所有群組對話
-系統 SHALL 在美食評論區顯示所有群組與 jaba 的對話，而非獨立的團隊聊天。
+系統 SHALL 在美食評論區顯示所有群組與 jaba 的對話。
 
 #### Scenario: 載入所有群組對話
 - Given 今日有 2 個群組各有對話
@@ -42,18 +42,14 @@
 - Then 美食評論區顯示空狀態
 - And 顯示「尚無聊天訊息」
 
-## REMOVED Requirements
-
-### Requirement: 移除「我要訂便當」按鈕
-原「我要訂便當」按鈕改為呷爸 LINE 好友 QRCode。
+### Requirement: LINE 好友 QRCode
+系統 SHALL 在看板頁面顯示呷爸 LINE 好友 QRCode。
 
 #### Scenario: 顯示 QRCode
 - Given 訪客開啟看板頁面
-- When 查看原「我要訂便當」位置
+- When 查看美食評論區下方
 - Then 顯示加入呷爸好友的 LINE QRCode
 - And 顯示「掃碼加入呷爸好友」文字說明
-
-## ADDED Requirements
 
 ### Requirement: 唯讀模式
 系統 SHALL 將美食評論區設為唯讀模式，不提供發送功能。

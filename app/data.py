@@ -143,6 +143,10 @@ def get_jaba_prompt() -> dict:
     if menu_recognition_file.exists():
         result["menu_recognition_prompt"] = menu_recognition_file.read_text(encoding="utf-8")
 
+    group_ordering_file = prompts_dir / "group_ordering_prompt.md"
+    if group_ordering_file.exists():
+        result["group_ordering_prompt"] = group_ordering_file.read_text(encoding="utf-8")
+
     return result
 
 
@@ -655,6 +659,86 @@ def clear_ai_chat_history(username: str, is_manager: bool = False) -> bool:
     today = date.today().isoformat()
     mode = "manager" if is_manager else "order"
     history_file = DATA_DIR / "users" / username / "chat_history" / f"{today}-{mode}.json"
+
+    if history_file.exists():
+        history_file.unlink()
+        return True
+    return False
+
+
+# === 群組對話歷史（群組點餐用）===
+
+def get_group_chat_history(group_id: str, max_messages: int = 30) -> list[dict]:
+    """取得群組當日的對話歷史（群組點餐用）
+
+    Args:
+        group_id: 群組 ID
+        max_messages: 最多返回的訊息數量
+
+    Returns:
+        對話歷史列表，每條包含 username, content, timestamp
+    """
+    today = date.today().isoformat()
+    history_file = DATA_DIR / "linebot" / "sessions" / f"{group_id}-chat.json"
+
+    data = read_json(history_file)
+    if not data or data.get("date") != today:
+        return []
+
+    messages = data.get("messages", [])
+    return messages[-max_messages:]
+
+
+def append_group_chat_history(
+    group_id: str,
+    username: str,
+    role: str,
+    content: str
+) -> None:
+    """新增一條群組對話記錄
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱（誰說的）
+        role: 角色（"user" 或 "assistant"）
+        content: 訊息內容
+    """
+    today = date.today().isoformat()
+    sessions_dir = DATA_DIR / "linebot" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    history_file = sessions_dir / f"{group_id}-chat.json"
+
+    data = read_json(history_file)
+
+    # 如果是新的一天或不存在，重新建立
+    if not data or data.get("date") != today:
+        data = {
+            "date": today,
+            "group_id": group_id,
+            "messages": [],
+            "created_at": datetime.now().isoformat()
+        }
+
+    data["messages"].append({
+        "username": username,
+        "role": role,
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    })
+
+    write_json(history_file, data)
+
+
+def clear_group_chat_history(group_id: str) -> bool:
+    """清除群組的對話歷史
+
+    Args:
+        group_id: 群組 ID
+
+    Returns:
+        是否成功清除
+    """
+    history_file = DATA_DIR / "linebot" / "sessions" / f"{group_id}-chat.json"
 
     if history_file.exists():
         history_file.unlink()

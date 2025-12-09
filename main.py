@@ -176,14 +176,68 @@ async def chat(request: Request):
     username = body.get("username", "").strip()
     message = body.get("message", "").strip()
     is_manager = body.get("is_manager", False)
+    group_id = body.get("group_id")  # 群組點餐時傳入
 
     if not username:
         return JSONResponse({"error": "請輸入名稱"}, status_code=400)
     if not message:
         return JSONResponse({"error": "請輸入訊息"}, status_code=400)
 
+    # 處理群組點餐指令
+    message_lower = message.strip().lower()
+    session_action = None
+
+    if group_id:
+        # 檢查是否為開始/結束點餐指令
+        if message == "開始點餐":
+            if is_group_ordering(group_id):
+                return {
+                    "message": "⚠️ 此群組已經在點餐中了！\n\n直接說出你要點的餐點即可。",
+                    "session_action": None
+                }
+            # 開始群組點餐
+            session = start_group_session(group_id, {
+                "user_id": "",  # LINE Bot 會傳入
+                "display_name": username
+            })
+            # 清空群組對話歷史（確保對話是這次點餐的內容）
+            data.clear_group_chat_history(group_id)
+            return {
+                "message": f"🍱 開始群組點餐！\n\n現在可以直接說出你要點的餐點，不需要 @呷爸。\n\n點餐完成後說「結束點餐」或「收單」即可。",
+                "session_action": "started"
+            }
+
+        if message_lower in ["結束點餐", "收單"]:
+            if not is_group_ordering(group_id):
+                return {
+                    "message": "⚠️ 目前沒有進行中的點餐。",
+                    "session_action": None
+                }
+            # 結束群組點餐並產生摘要
+            session = end_group_session(group_id)
+            summary_text = generate_session_summary(session)
+            return {
+                "message": f"✅ 點餐結束！\n\n{summary_text}",
+                "session_action": "ended"
+            }
+
+        # 查詢群組目前訂單
+        if message_lower in ["目前訂單", "訂單", "查看訂單", "訂單狀況", "點了什麼"]:
+            if is_group_ordering(group_id):
+                session = get_group_session(group_id)
+                summary_text = generate_session_summary(session)
+                return {
+                    "message": f"📋 目前點餐狀況\n\n{summary_text}",
+                    "session_action": None
+                }
+
+    # 判斷是否為群組點餐模式
+    group_ordering = False
+    if group_id and is_group_ordering(group_id):
+        group_ordering = True
+
     # 呼叫 AI（非同步，不阻塞其他請求）
-    response = await ai.call_ai(username, message, is_manager)
+    response = await ai.call_ai(username, message, is_manager, group_ordering, group_id)
 
     t_ai_done = time.time()
 
@@ -192,25 +246,27 @@ async def chat(request: Request):
     action_results = []
 
     if actions:
-        action_results = ai.execute_actions(username, actions, is_manager)
+        # 群組模式傳入 group_id，讓 execute_actions 處理群組訂單
+        action_results = ai.execute_actions(username, actions, is_manager, group_id if group_ordering else None)
 
-        # 廣播每個動作的事件
-        for result in action_results:
-            if result.get("success") and result.get("event"):
-                event_type = result["event"]
-                event_data = {
-                    "username": username,
-                    "summary": result.get("summary"),
-                    "today": result.get("today"),
-                    "store_name": result.get("store_name"),
-                }
-                await broadcast_event(event_type, event_data)
+        # 廣播每個動作的事件（僅個人模式）
+        if not group_ordering:
+            for result in action_results:
+                if result.get("success") and result.get("event"):
+                    event_type = result["event"]
+                    event_data = {
+                        "username": username,
+                        "summary": result.get("summary"),
+                        "today": result.get("today"),
+                        "store_name": result.get("store_name"),
+                    }
+                    await broadcast_event(event_type, event_data)
 
-                # 店家變更時，在團體聊天室新增系統訊息
-                if event_type == "store_changed" and result.get("store_name"):
-                    store_name = result.get("store_name")
-                    msg = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
-                    await sio.emit("chat_message", msg)
+                    # 店家變更時，在團體聊天室新增系統訊息
+                    if event_type == "store_changed" and result.get("store_name"):
+                        store_name = result.get("store_name")
+                        msg = data.save_system_message(f"今日店家已設定：{store_name}，可以開始訂餐囉！")
+                        await sio.emit("chat_message", msg)
 
     t_api_end = time.time()
 
@@ -505,6 +561,322 @@ def save_linebot_whitelist(whitelist: dict):
     data.write_json(linebot_dir / "whitelist.json", whitelist)
 
 
+# === LINE Bot 群組點餐 Session ===
+
+def get_group_session(group_id: str) -> dict | None:
+    """取得群組點餐 session"""
+    session_file = data.DATA_DIR / "linebot" / "sessions" / f"{group_id}.json"
+    if session_file.exists():
+        return data.read_json(session_file)
+    return None
+
+
+def save_group_session(group_id: str, session: dict):
+    """儲存群組點餐 session"""
+    sessions_dir = data.DATA_DIR / "linebot" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    data.write_json(sessions_dir / f"{group_id}.json", session)
+
+
+def is_group_ordering(group_id: str) -> bool:
+    """檢查群組是否在點餐中"""
+    session = get_group_session(group_id)
+    if session and session.get("status") == "ordering":
+        return True
+    return False
+
+
+def start_group_session(group_id: str, started_by: dict) -> dict:
+    """開始群組點餐 session"""
+    session = {
+        "group_id": group_id,
+        "status": "ordering",
+        "started_at": datetime.now().isoformat(),
+        "started_by": started_by,
+        "orders": []
+    }
+    save_group_session(group_id, session)
+    return session
+
+
+def end_group_session(group_id: str) -> dict | None:
+    """結束群組點餐 session，回傳含訂單摘要的 session"""
+    session = get_group_session(group_id)
+    if session:
+        session["status"] = "ended"
+        session["ended_at"] = datetime.now().isoformat()
+        save_group_session(group_id, session)
+    return session
+
+
+def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
+    """將訂單加入群組 session
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱
+        order: 訂單資料（包含 items, total 等）
+
+    Returns:
+        是否成功加入
+    """
+    session = get_group_session(group_id)
+    if not session or session.get("status") != "ordering":
+        return False
+
+    # 建立簡化的訂單記錄
+    order_record = {
+        "username": username,
+        "order_id": order.get("order_id"),
+        "store_name": order.get("store_name"),
+        "items": [
+            {
+                "name": item.get("name"),
+                "quantity": item.get("quantity", 1),
+                "price": item.get("price"),
+                "subtotal": item.get("subtotal")
+            }
+            for item in order.get("items", [])
+        ],
+        "total": order.get("total", 0),
+        "created_at": order.get("created_at")
+    }
+
+    session["orders"].append(order_record)
+    save_group_session(group_id, session)
+    return True
+
+
+def generate_session_summary(session: dict) -> str:
+    """產生群組點餐摘要
+
+    Args:
+        session: 群組 session 資料
+
+    Returns:
+        格式化的訂單摘要文字
+    """
+    orders = session.get("orders", [])
+
+    if not orders:
+        return "📋 本次點餐沒有任何訂單"
+
+    # 依使用者分組
+    user_orders = {}
+    for order in orders:
+        username = order.get("username", "未知")
+        if username not in user_orders:
+            user_orders[username] = []
+        user_orders[username].append(order)
+
+    # 統計品項
+    item_counts = {}
+    grand_total = 0
+
+    lines = ["📋 點餐摘要", ""]
+
+    # 各人訂單
+    for username, user_order_list in user_orders.items():
+        user_total = 0
+        user_items = []
+        for order in user_order_list:
+            for item in order.get("items", []):
+                name = item.get("name")
+                qty = item.get("quantity", 1)
+                subtotal = item.get("subtotal", 0)
+                user_items.append(f"  • {name} x{qty} ${subtotal}")
+                user_total += subtotal
+
+                # 統計總品項
+                if name not in item_counts:
+                    item_counts[name] = 0
+                item_counts[name] += qty
+
+        lines.append(f"👤 {username}（${user_total}）")
+        lines.extend(user_items)
+        lines.append("")
+        grand_total += user_total
+
+    # 品項統計
+    lines.append("📦 品項統計")
+    for name, count in sorted(item_counts.items(), key=lambda x: -x[1]):
+        lines.append(f"  • {name} x{count}")
+
+    lines.append("")
+    lines.append(f"💰 總金額：${grand_total}")
+    lines.append(f"👥 共 {len(user_orders)} 人點餐")
+
+    return "\n".join(lines)
+
+
+# === 群組訂單操作（獨立於個人訂單）===
+
+def group_create_order(group_id: str, username: str, items: list) -> dict:
+    """群組點餐：建立訂單（只儲存在 session 中）
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱
+        items: 品項列表 [{"name": "...", "quantity": 1, "note": "..."}]
+
+    Returns:
+        {"success": True, "order": {...}} 或 {"success": False, "error": "..."}
+    """
+    session = get_group_session(group_id)
+    if not session or session.get("status") != "ordering":
+        return {"success": False, "error": "群組不在點餐中"}
+
+    # 取得今日店家菜單
+    today_info = data.get_today_info()
+    today_stores = today_info.get("stores", [])
+
+    if not today_stores:
+        return {"success": False, "error": "今日尚未設定店家"}
+
+    # 查找品項價格
+    enriched_items = []
+    total = 0
+
+    for item in items:
+        item_name = item.get("name", "")
+        quantity = item.get("quantity", 1)
+        note = item.get("note", "")
+
+        # 從菜單找價格
+        price = 0
+        found = False
+        for store_ref in today_stores:
+            store_id = store_ref.get("store_id")
+            menu = data.get_menu(store_id)
+            if menu:
+                for cat in menu.get("categories", []):
+                    for mi in cat.get("items", []):
+                        if mi.get("name") == item_name or item_name in mi.get("name", ""):
+                            price = mi.get("price", 0)
+                            found = True
+                            break
+                    if found:
+                        break
+            if found:
+                break
+
+        subtotal = price * quantity
+        enriched_items.append({
+            "name": item_name,
+            "quantity": quantity,
+            "price": price,
+            "subtotal": subtotal,
+            "note": note
+        })
+        total += subtotal
+
+    # 建立訂單記錄
+    order = {
+        "username": username,
+        "items": enriched_items,
+        "total": total,
+        "created_at": datetime.now().isoformat()
+    }
+
+    # 加入 session
+    session["orders"].append(order)
+    save_group_session(group_id, session)
+
+    return {"success": True, "order": order}
+
+
+def group_remove_item(group_id: str, username: str, item_name: str, quantity: int = 1) -> dict:
+    """群組點餐：移除品項
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱
+        item_name: 品項名稱
+        quantity: 移除數量
+
+    Returns:
+        {"success": True} 或 {"success": False, "error": "..."}
+    """
+    session = get_group_session(group_id)
+    if not session or session.get("status") != "ordering":
+        return {"success": False, "error": "群組不在點餐中"}
+
+    # 找到該使用者的訂單
+    for order in session["orders"]:
+        if order.get("username") != username:
+            continue
+
+        # 找到品項
+        for i, item in enumerate(order.get("items", [])):
+            if item.get("name") == item_name or item_name in item.get("name", ""):
+                current_qty = item.get("quantity", 1)
+                if quantity >= current_qty:
+                    # 移除整個品項
+                    order["items"].pop(i)
+                else:
+                    # 減少數量
+                    item["quantity"] = current_qty - quantity
+                    item["subtotal"] = item.get("price", 0) * item["quantity"]
+
+                # 重新計算總額
+                order["total"] = sum(it.get("subtotal", 0) for it in order.get("items", []))
+
+                # 如果訂單沒有品項了，移除整筆訂單
+                if not order["items"]:
+                    session["orders"].remove(order)
+
+                save_group_session(group_id, session)
+                return {"success": True}
+
+    return {"success": False, "error": f"找不到品項：{item_name}"}
+
+
+def group_cancel_order(group_id: str, username: str) -> dict:
+    """群組點餐：取消使用者的所有訂單
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱
+
+    Returns:
+        {"success": True} 或 {"success": False, "error": "..."}
+    """
+    session = get_group_session(group_id)
+    if not session or session.get("status") != "ordering":
+        return {"success": False, "error": "群組不在點餐中"}
+
+    # 移除該使用者的所有訂單
+    original_count = len(session["orders"])
+    session["orders"] = [o for o in session["orders"] if o.get("username") != username]
+
+    if len(session["orders"]) == original_count:
+        return {"success": False, "error": "你目前沒有訂單"}
+
+    save_group_session(group_id, session)
+    return {"success": True}
+
+
+def group_update_order(group_id: str, username: str, old_item: str, new_item: dict) -> dict:
+    """群組點餐：修改訂單（替換品項）
+
+    Args:
+        group_id: 群組 ID
+        username: 使用者名稱
+        old_item: 原品項名稱
+        new_item: 新品項 {"name": "...", "quantity": 1}
+
+    Returns:
+        {"success": True} 或 {"success": False, "error": "..."}
+    """
+    # 先移除舊品項
+    result = group_remove_item(group_id, username, old_item, quantity=999)
+    if not result.get("success"):
+        return result
+
+    # 新增新品項
+    return group_create_order(group_id, username, [new_item])
+
+
 @app.post("/api/linebot/register")
 async def linebot_register(request: Request):
     """註冊 LINE Bot 使用者或群組"""
@@ -593,6 +965,20 @@ async def linebot_unregister(request: Request):
 
     save_linebot_whitelist(whitelist)
     return {"success": True, "message": "已取消註冊"}
+
+
+@app.get("/api/linebot/session/{group_id}")
+async def linebot_get_session(group_id: str):
+    """檢查群組是否在點餐中"""
+    ordering = is_group_ordering(group_id)
+    if ordering:
+        session = get_group_session(group_id)
+        return {
+            "ordering": True,
+            "started_at": session.get("started_at"),
+            "started_by": session.get("started_by")
+        }
+    return {"ordering": False}
 
 
 # === 啟動應用 ===

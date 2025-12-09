@@ -12,9 +12,16 @@ from . import data
 from .providers import get_provider
 
 
-def get_system_prompt(is_manager: bool = False) -> str:
+def get_system_prompt(is_manager: bool = False, group_ordering: bool = False) -> str:
     """取得系統提示詞"""
     prompt_data = data.get_jaba_prompt()
+
+    if group_ordering:
+        # 群組點餐模式：載入 group_ordering_prompt
+        base_prompt = prompt_data.get("group_ordering_prompt", "")
+        return f"""{base_prompt}
+
+請用繁體中文回應。"""
 
     if is_manager:
         # 管理員模式：載入 manager_prompt
@@ -23,31 +30,67 @@ def get_system_prompt(is_manager: bool = False) -> str:
 
 請用繁體中文回應。"""
 
-    # 一般使用者模式：載入 user_prompt（已包含完整的動作說明和格式）
+    # 一般使用者模式：載入 user_prompt
     base_prompt = prompt_data.get("user_prompt", "")
     return f"""{base_prompt}
 
 請用繁體中文回應。"""
 
 
-def build_context(username: str, is_manager: bool = False) -> dict:
-    """建立 AI 上下文（完整版，讓呷爸能提供高品質的個人化服務）"""
+def build_context(
+    username: str,
+    is_manager: bool = False,
+    group_ordering: bool = False,
+    group_id: str | None = None,
+    session_orders: list | None = None
+) -> dict:
+    """建立 AI 上下文"""
     today_info = data.get_today_info()
+    today_stores = today_info.get("stores", [])
 
-    # 取得使用者 profile（包含偏好稱呼）
+    # 群組點餐模式
+    if group_ordering:
+        # 取得當前使用者的偏好
+        profile = data.get_user_profile(username)
+        user_profile = None
+        if profile:
+            user_profile = profile.get("preferences", {})
+
+        context = {
+            "today": date.today().isoformat(),
+            "today_stores": today_stores,
+            "username": username,  # 當前發訊息的人
+            "user_profile": user_profile,  # 當前使用者的偏好
+            "group_ordering": True,
+            "session_orders": session_orders or [],  # 群組目前的訂單
+        }
+
+        # 提供今日店家的菜單
+        if today_stores:
+            context["menus"] = {}
+            for store_ref in today_stores:
+                store_id = store_ref.get("store_id")
+                menu = data.get_menu(store_id)
+                if menu:
+                    context["menus"][store_id] = {
+                        "name": store_ref.get("store_name", ""),
+                        "menu": menu
+                    }
+
+        return context
+
+    # 個人模式：完整 context
     profile = data.get_user_profile(username)
     preferred_name = None
     if profile:
         preferred_name = profile.get("preferences", {}).get("preferred_name")
 
-    # 今日店家完整資訊
-    today_stores = today_info.get("stores", [])
-
     context = {
         "today": date.today().isoformat(),
-        "today_stores": today_stores,  # 完整店家資訊
+        "today_stores": today_stores,
         "username": username,
         "preferred_name": preferred_name,
+        "group_ordering": False,
     }
 
     # 提供今日店家的完整菜單（包含 description 供呷爸參考）
@@ -125,10 +168,28 @@ def _format_chat_history(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_group_chat_history(history: list[dict]) -> str:
+    """格式化群組對話歷史為 prompt 可讀格式（包含使用者名稱）"""
+    if not history:
+        return "(本次點餐尚無對話)"
+
+    lines = []
+    for msg in history:
+        if msg["role"] == "user":
+            username = msg.get("username", "未知")
+            lines.append(f"{username}: {msg['content']}")
+        else:
+            lines.append(f"呷爸: {msg['content']}")
+
+    return "\n".join(lines)
+
+
 async def call_ai(
     username: str,
     message: str,
-    is_manager: bool = False
+    is_manager: bool = False,
+    group_ordering: bool = False,
+    group_id: str | None = None
 ) -> dict:
     """呼叫 AI CLI（支援多種 Provider）
 
@@ -151,18 +212,32 @@ async def call_ai(
     # 取得 provider
     provider = get_provider(provider_name)
 
-    # 取得對話歷史（最多 20 條）
-    history = data.get_ai_chat_history(username, is_manager)
+    # 取得對話歷史
+    if group_ordering and group_id:
+        # 群組點餐：使用群組共享對話歷史（保留更多訊息）
+        history = data.get_group_chat_history(group_id, max_messages=50)
+        history_str = _format_group_chat_history(history)
+    else:
+        # 個人模式：使用個人對話歷史
+        history = data.get_ai_chat_history(username, is_manager)
+        history_str = _format_chat_history(history)
 
     t_prep = time.time()
     timings["prepare"] = round(t_prep - t_start, 3)
 
-    system_prompt = get_system_prompt(is_manager)
-    context = build_context(username, is_manager)
+    # 群組點餐時取得 session_orders
+    session_orders = None
+    if group_ordering and group_id:
+        from main import get_group_session
+        session = get_group_session(group_id)
+        if session:
+            session_orders = session.get("orders", [])
+
+    system_prompt = get_system_prompt(is_manager, group_ordering)
+    context = build_context(username, is_manager, group_ordering, group_id, session_orders)
 
     # 組合完整訊息（包含對話歷史）
     context_str = json.dumps(context, ensure_ascii=False, indent=2)
-    history_str = _format_chat_history(history)
 
     full_message = f"""[系統上下文]
 {context_str}
@@ -186,7 +261,10 @@ async def call_ai(
     cmd_result = provider.build_chat_command(model, full_message, system_prompt, None)
 
     # 先儲存使用者訊息到歷史
-    data.append_ai_chat_history(username, "user", message, is_manager)
+    if group_ordering and group_id:
+        data.append_group_chat_history(group_id, username, "user", message)
+    else:
+        data.append_ai_chat_history(username, "user", message, is_manager)
 
     try:
         t_cli_start = time.time()
@@ -217,7 +295,10 @@ async def call_ai(
         # 儲存 AI 回應到歷史（只保存 message，不保存 actions）
         ai_message = response.get("message", "")
         if ai_message:
-            data.append_ai_chat_history(username, "assistant", ai_message, is_manager)
+            if group_ordering and group_id:
+                data.append_group_chat_history(group_id, username, "assistant", ai_message)
+            else:
+                data.append_ai_chat_history(username, "assistant", ai_message, is_manager)
 
         t_end = time.time()
         timings["save_history"] = round(t_end - t_parse, 3)
@@ -459,19 +540,29 @@ async def recognize_menu_image(image_base64: str) -> dict:
             os.unlink(temp_path)
 
 
-def execute_actions(username: str, actions: list, is_manager: bool = False) -> list:
+def execute_actions(
+    username: str,
+    actions: list,
+    is_manager: bool = False,
+    group_id: str | None = None
+) -> list:
     """執行多個 AI 請求的動作，回傳結果陣列"""
     if not actions:
         return []
 
     results = []
     for action in actions:
-        result = execute_action(username, action, is_manager)
+        result = execute_action(username, action, is_manager, group_id)
         results.append(result)
     return results
 
 
-def execute_action(username: str, action: dict, is_manager: bool = False) -> dict:
+def execute_action(
+    username: str,
+    action: dict,
+    is_manager: bool = False,
+    group_id: str | None = None
+) -> dict:
     """執行單一 AI 請求的動作"""
     if not action:
         return {"success": True}
@@ -480,7 +571,30 @@ def execute_action(username: str, action: dict, is_manager: bool = False) -> dic
     action_data = action.get("data", {})
 
     try:
-        if action_type == "create_order":
+        # 群組訂單操作（獨立於個人訂單）
+        if action_type == "group_create_order" and group_id:
+            from main import group_create_order
+            items = action_data.get("items", [])
+            return group_create_order(group_id, username, items)
+
+        elif action_type == "group_remove_item" and group_id:
+            from main import group_remove_item
+            item_name = action_data.get("item_name", "")
+            quantity = action_data.get("quantity", 1)
+            return group_remove_item(group_id, username, item_name, quantity)
+
+        elif action_type == "group_cancel_order" and group_id:
+            from main import group_cancel_order
+            return group_cancel_order(group_id, username)
+
+        elif action_type == "group_update_order" and group_id:
+            from main import group_update_order
+            old_item = action_data.get("old_item", "")
+            new_item = action_data.get("new_item", {})
+            return group_update_order(group_id, username, old_item, new_item)
+
+        # 個人訂單操作
+        elif action_type == "create_order":
             return _create_order(username, action_data)
         elif action_type == "update_order":
             return _update_order(username, action_data)

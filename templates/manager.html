@@ -675,10 +675,15 @@
         const data = await res.json();
         console.log('reloadCurrentGroupOrders API response:', data);
         currentGroupOrders = data;
-        renderGroupOrders(data);
-        renderPayments(data);
-        renderStats(data);
-        document.getElementById('proxy-order-btn').style.display = 'block';
+
+        // 更新各個面板
+        updateGroupOrdersPanel(data);
+        updateGroupPaymentsPanel(data);
+        updateGroupStatsPanel(data);
+
+        // 顯示代理點餐按鈕（僅在點餐進行中）
+        document.getElementById('proxy-order-btn').style.display =
+          data.status === 'ordering' ? 'inline-block' : 'none';
       } catch (err) {
         console.error('重新載入群組訂單失敗:', err);
       }

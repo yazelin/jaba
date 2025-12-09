@@ -294,8 +294,9 @@ async def call_ai(
         history = data.get_group_chat_history(group_id, max_messages=50)
         history_str = _format_group_chat_history(history)
     else:
-        # 個人模式：使用個人對話歷史
-        history = data.get_ai_chat_history(username, is_manager)
+        # 個人模式：使用個人對話歷史（優先用 line_user_id）
+        user_key = line_user_id or username
+        history = data.get_ai_chat_history(user_key, is_manager)
         history_str = _format_chat_history(history)
 
     t_prep = time.time()
@@ -346,7 +347,7 @@ async def call_ai(
         if group_name:
             data.append_to_board_chat(group_name, username, "user", message)
     else:
-        data.append_ai_chat_history(username, "user", message, is_manager)
+        data.append_ai_chat_history(user_key, "user", message, is_manager)
 
     try:
         t_cli_start = time.time()
@@ -383,7 +384,7 @@ async def call_ai(
                 if group_name:
                     data.append_to_board_chat(group_name, "呷爸", "assistant", ai_message)
             else:
-                data.append_ai_chat_history(username, "assistant", ai_message, is_manager)
+                data.append_ai_chat_history(user_key, "assistant", ai_message, is_manager)
 
         t_end = time.time()
         timings["save_history"] = round(t_end - t_parse, 3)

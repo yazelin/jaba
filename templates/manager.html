@@ -1403,6 +1403,10 @@
     socket.on('group_session_started', async (data) => {
       // 重新載入群組列表（保持選中狀態）
       await loadGroups();
+      // 如果是當前選中的群組，重新載入訂單（開單會清空訂單）
+      if (selectedGroupId === data.group_id) {
+        await reloadCurrentGroupOrders();
+      }
       showNotification(`群組點餐已開始（${data.started_by || ''}）`);
     });
 

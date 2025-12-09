@@ -2,18 +2,7 @@
 import json
 from pathlib import Path
 from datetime import date, datetime
-from dataclasses import dataclass, asdict
 from typing import Any
-
-
-@dataclass
-class SessionInfo:
-    """Session 資訊，支援多種 CLI provider"""
-    provider: str  # "claude" 或 "gemini"
-    session_id: str | None = None  # Claude 用：UUID
-    session_index: int | None = None  # Gemini 用：索引編號
-    is_manager: bool = False
-    created_at: str | None = None
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
@@ -383,102 +372,6 @@ def update_user_profile_by_line_id(line_user_id: str, updates: dict) -> dict:
     return profile
 
 
-def get_session_id(username: str, is_manager: bool = False) -> str | None:
-    """取得使用者今日的 session ID（向後相容，僅回傳 Claude session_id）"""
-    session_info = get_session_info(username, is_manager)
-    if session_info and session_info.provider == "claude":
-        return session_info.session_id
-    return None
-
-
-def save_session_id(username: str, session_id: str, is_manager: bool = False) -> None:
-    """儲存使用者今日的 session ID（向後相容，使用 Claude provider）"""
-    session_info = SessionInfo(
-        provider="claude",
-        session_id=session_id,
-        is_manager=is_manager,
-        created_at=datetime.now().isoformat()
-    )
-    save_session_info(username, session_info)
-
-
-def clear_session_id(username: str, is_manager: bool = False) -> bool:
-    """清除使用者今日的 session ID（向後相容）"""
-    return clear_session_info(username, is_manager)
-
-
-def get_session_info(username: str, is_manager: bool = False) -> SessionInfo | None:
-    """取得使用者今日的 session 資訊"""
-    today = date.today().isoformat()
-    suffix = "-manager" if is_manager else ""
-    session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.json"
-
-    # 嘗試讀取新格式 (JSON)
-    if session_file.exists():
-        data = read_json(session_file)
-        if data:
-            return SessionInfo(
-                provider=data.get("provider", "claude"),
-                session_id=data.get("session_id"),
-                session_index=data.get("session_index"),
-                is_manager=data.get("is_manager", is_manager),
-                created_at=data.get("created_at")
-            )
-
-    # 向後相容：嘗試讀取舊格式 (.txt)
-    old_session_file = DATA_DIR / "users" / username / "sessions" / f"{today}{suffix}.txt"
-    if old_session_file.exists():
-        session_id = old_session_file.read_text().strip()
-        if session_id:
-            return SessionInfo(
-                provider="claude",
-                session_id=session_id,
-                is_manager=is_manager
-            )
-
-    return None
-
-
-def save_session_info(username: str, session_info: SessionInfo) -> None:
-    """儲存使用者今日的 session 資訊"""
-    today = date.today().isoformat()
-    suffix = "-manager" if session_info.is_manager else ""
-    session_dir = DATA_DIR / "users" / username / "sessions"
-    session_dir.mkdir(parents=True, exist_ok=True)
-
-    # 使用新格式 (JSON)
-    session_file = session_dir / f"{today}{suffix}.json"
-    write_json(session_file, asdict(session_info))
-
-    # 清除舊格式檔案（如果存在）
-    old_session_file = session_dir / f"{today}{suffix}.txt"
-    if old_session_file.exists():
-        old_session_file.unlink()
-
-
-def clear_session_info(username: str, is_manager: bool = False) -> bool:
-    """清除使用者今日的 session 資訊（用於重新開始對話）"""
-    today = date.today().isoformat()
-    suffix = "-manager" if is_manager else ""
-    session_dir = DATA_DIR / "users" / username / "sessions"
-
-    cleared = False
-
-    # 清除新格式
-    session_file = session_dir / f"{today}{suffix}.json"
-    if session_file.exists():
-        session_file.unlink()
-        cleared = True
-
-    # 清除舊格式
-    old_session_file = session_dir / f"{today}{suffix}.txt"
-    if old_session_file.exists():
-        old_session_file.unlink()
-        cleared = True
-
-    return cleared
-
-
 # === 訂單管理 ===
 
 def get_user_order(username: str, order_date: str = None) -> dict | None:
@@ -683,7 +576,8 @@ def append_ai_chat_history(
     username: str,
     role: str,
     content: str,
-    is_manager: bool = False
+    is_manager: bool = False,
+    max_messages: int = 30
 ) -> None:
     """新增一條 AI 對話記錄
 
@@ -692,6 +586,7 @@ def append_ai_chat_history(
         role: 角色（"user" 或 "assistant"）
         content: 訊息內容
         is_manager: 是否為管理員模式
+        max_messages: 最多保留的訊息數量（預設 30 條，超過自動清除舊訊息）
     """
     today = date.today().isoformat()
     mode = "manager" if is_manager else "order"
@@ -711,6 +606,10 @@ def append_ai_chat_history(
         "content": content,
         "timestamp": datetime.now().isoformat()
     })
+
+    # 自動清理：只保留最近 max_messages 筆訊息
+    if len(data["messages"]) > max_messages:
+        data["messages"] = data["messages"][-max_messages:]
 
     write_json(history_file, data)
 

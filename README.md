@@ -145,12 +145,13 @@ jaba/
 │   │       ├── info.json   # 店家資訊
 │   │       ├── menu.json   # 菜單
 │   │       └── images/     # 菜品圖片
-│   ├── groups/             # LINE 群組資料
-│   │   └── {group_id}/
-│   │       └── session.json  # 群組點餐 session
+│   ├── linebot/            # LINE Bot 群組資料
+│   │   └── sessions/
+│   │       └── {group_id}.json  # 群組點餐 session（含訂單、付款）
 │   ├── users/              # 使用者資料（以 LINE User ID 為識別）
 │   │   └── {line_user_id}/
-│   │       └── profile.json  # 使用者偏好
+│   │       ├── profile.json    # 使用者偏好
+│   │       └── chat_history/   # 對話歷史
 │   ├── board_chat/         # 看板聊天記錄（聚合群組對話）
 │   └── system/             # 系統設定
 │       ├── config.json     # 系統配置
@@ -336,12 +337,11 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 **管理員模式額外欄位：**
 ```json
 {
-  "available_stores": [{"id": "coco", "name": "CoCo都可茶飲"}],
-  "today_summary": { "orders": [...], "grand_total": 500 },
-  "payments": { "records": [...] },
-  "recent_store_history": [{"date": "2025-12-07", "store_name": "佳香味"}]
+  "available_stores": [{"id": "coco", "name": "CoCo都可茶飲"}]
 }
 ```
+
+> 注意：訂單和付款管理透過超級管理員頁面操作，不透過管理員對話模式。
 
 ### 3. 對話歷史
 
@@ -379,10 +379,10 @@ uv run uvicorn main:socket_app --reload --host 0.0.0.0 --port 8098
 
 | 函式 | 檔案 | 說明 |
 |------|------|------|
-| `get_system_prompt()` | `app/ai.py:15` | 載入系統提示詞 |
-| `build_context()` | `app/ai.py:40` | 建立動態上下文 |
-| `get_ai_chat_history()` | `app/data.py:654` | 取得對話歷史 |
-| `call_ai()` | `app/ai.py:240` | 組合並呼叫 AI |
+| `get_system_prompt()` | `app/ai.py` | 載入系統提示詞 |
+| `build_context()` | `app/ai.py` | 建立動態上下文 |
+| `get_ai_chat_history()` | `app/data.py` | 取得對話歷史 |
+| `call_ai()` | `app/ai.py` | 組合並呼叫 AI |
 
 ## 授權
 

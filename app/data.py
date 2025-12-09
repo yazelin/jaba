@@ -237,8 +237,6 @@ def create_user(line_user_id: str, display_name: str) -> dict:
     """
     user_dir = DATA_DIR / "users" / line_user_id
     user_dir.mkdir(parents=True, exist_ok=True)
-    (user_dir / "orders").mkdir(exist_ok=True)
-    (user_dir / "sessions").mkdir(exist_ok=True)
 
     profile = {
         "line_user_id": line_user_id,
@@ -266,8 +264,6 @@ def ensure_user(username: str) -> dict:
 
     user_dir = DATA_DIR / "users" / username
     user_dir.mkdir(parents=True, exist_ok=True)
-    (user_dir / "orders").mkdir(exist_ok=True)
-    (user_dir / "sessions").mkdir(exist_ok=True)
 
     profile = {
         "username": username,
@@ -370,176 +366,6 @@ def update_user_profile_by_line_id(line_user_id: str, updates: dict) -> dict:
     # 儲存更新後的 profile
     write_json(DATA_DIR / "users" / line_user_id / "profile.json", profile)
     return profile
-
-
-# === 訂單管理 ===
-
-def get_user_order(username: str, order_date: str = None) -> dict | None:
-    """取得使用者某日的最新訂單"""
-    orders = get_user_orders(username, order_date)
-    return orders[-1] if orders else None
-
-
-def get_user_orders(username: str, order_date: str = None) -> list[dict]:
-    """取得使用者某日的所有訂單"""
-    if order_date is None:
-        order_date = date.today().isoformat()
-    orders_dir = DATA_DIR / "users" / username / "orders"
-    if not orders_dir.exists():
-        return []
-
-    orders = []
-    # 訂單格式：{date}-{timestamp}.json
-    for f in orders_dir.glob(f"{order_date}-*.json"):
-        order = read_json(f)
-        if order:
-            orders.append(order)
-
-    # 按建立時間排序
-    orders.sort(key=lambda x: x.get("created_at", ""))
-    return orders
-
-
-def save_user_order(username: str, order: dict) -> str:
-    """儲存使用者訂單，回傳 order_id"""
-    order_date = order.get("date", date.today().isoformat())
-    timestamp = datetime.now().strftime("%H%M%S%f")[:10]
-    order_id = f"{order_date}-{timestamp}"
-    order["order_id"] = order_id
-    write_json(DATA_DIR / "users" / username / "orders" / f"{order_id}.json", order)
-    return order_id
-
-
-def delete_user_order(username: str, order_id: str) -> bool:
-    """刪除使用者特定訂單"""
-    order_file = DATA_DIR / "users" / username / "orders" / f"{order_id}.json"
-    if order_file.exists():
-        order_file.unlink()
-        return True
-    return False
-
-
-def get_daily_summary(order_date: str = None) -> dict | None:
-    """取得每日訂單彙整"""
-    if order_date is None:
-        order_date = date.today().isoformat()
-    return read_json(DATA_DIR / "orders" / order_date / "summary.json")
-
-
-def save_daily_summary(summary: dict) -> None:
-    """儲存每日訂單彙整"""
-    order_date = summary.get("date", date.today().isoformat())
-    order_dir = DATA_DIR / "orders" / order_date
-    order_dir.mkdir(parents=True, exist_ok=True)
-    write_json(order_dir / "summary.json", summary)
-
-
-def get_payments(order_date: str = None) -> dict | None:
-    """取得付款記錄"""
-    if order_date is None:
-        order_date = date.today().isoformat()
-    return read_json(DATA_DIR / "orders" / order_date / "payments.json")
-
-
-def save_payments(payments: dict) -> None:
-    """儲存付款記錄"""
-    order_date = payments.get("date", date.today().isoformat())
-    order_dir = DATA_DIR / "orders" / order_date
-    order_dir.mkdir(parents=True, exist_ok=True)
-    write_json(order_dir / "payments.json", payments)
-
-
-def update_daily_summary_with_order(username: str, order: dict) -> dict:
-    """用訂單更新每日彙整（支援多訂單）"""
-    order_date = order.get("date", date.today().isoformat())
-    order_id = order.get("order_id")
-
-    summary = get_daily_summary(order_date) or {
-        "date": order_date,
-        "store_id": order.get("store_id"),
-        "store_name": order.get("store_name"),
-        "orders": [],
-        "item_summary": [],
-        "grand_total": 0,
-        "updated_at": datetime.now().isoformat()
-    }
-
-    # 用 order_id 識別訂單
-    summary["orders"] = [o for o in summary["orders"] if o.get("order_id") != order_id]
-
-    # 加入新訂單
-    summary["orders"].append({
-        "order_id": order_id,
-        "username": username,
-        "store_id": order.get("store_id"),
-        "store_name": order.get("store_name"),
-        "items": order["items"],
-        "total": order["total"]
-    })
-
-    # 重新計算品項統計
-    item_counts = {}
-    for o in summary["orders"]:
-        for item in o["items"]:
-            name = item["name"]
-            qty = item.get("quantity", 1)
-            item_counts[name] = item_counts.get(name, 0) + qty
-
-    summary["item_summary"] = [{"name": k, "quantity": v} for k, v in item_counts.items()]
-    summary["grand_total"] = sum(o["total"] for o in summary["orders"])
-    summary["updated_at"] = datetime.now().isoformat()
-
-    save_daily_summary(summary)
-
-    # 更新付款記錄
-    payments = get_payments(order_date) or {
-        "date": order_date,
-        "records": [],
-        "total_collected": 0,
-        "total_pending": 0
-    }
-
-    # 計算該使用者所有訂單的總金額
-    user_total = sum(o["total"] for o in summary["orders"] if o["username"] == username)
-
-    # 更新或新增付款記錄
-    existing = next((r for r in payments["records"] if r["username"] == username), None)
-    if existing:
-        old_amount = existing["amount"]
-        paid_amount = existing.get("paid_amount", 0)
-        existing["amount"] = user_total
-
-        # 如果有付過款且金額有變動，智慧更新付款狀態
-        if paid_amount > 0 and old_amount != user_total:
-            if user_total > paid_amount:
-                # 金額增加：變成部分已付
-                existing["paid"] = False
-                existing["note"] = f"已付 ${paid_amount}，待補 ${user_total - paid_amount}"
-            elif user_total < paid_amount:
-                # 金額減少：維持已付，標記待退
-                existing["paid"] = True
-                existing["note"] = f"待退 ${paid_amount - user_total}"
-            else:
-                # 金額等於已付金額：清除備註
-                existing["paid"] = True
-                existing["note"] = None
-    else:
-        payments["records"].append({
-            "username": username,
-            "amount": user_total,
-            "paid": False,
-            "paid_amount": 0,
-            "paid_at": None,
-            "note": None
-        })
-
-    # 重新計算總額（基於 paid_amount）
-    payments["total_collected"] = sum(r.get("paid_amount", 0) for r in payments["records"])
-    payments["total_pending"] = sum(r["amount"] for r in payments["records"]) - payments["total_collected"]
-
-    save_payments(payments)
-
-    return summary
 
 
 # === AI 對話歷史管理 ===

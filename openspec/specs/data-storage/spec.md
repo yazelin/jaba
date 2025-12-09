@@ -1,14 +1,23 @@
 # data-storage Specification
 
 ## Purpose
-TBD - created by archiving change add-data-architecture. Update Purpose after archive.
+
+定義系統的檔案儲存結構和資料格式。
+
 ## Requirements
+
 ### Requirement: 資料目錄結構
-系統 SHALL 使用 `data/` 目錄作為所有資料的根目錄，包含 system/、stores/、users/、orders/ 子目錄。
+系統 SHALL 使用 `data/` 目錄作為所有資料的根目錄。
 
 #### Scenario: 首次啟動建立目錄
 - **WHEN** 系統首次啟動且 `data/` 不存在
-- **THEN** 自動建立完整的目錄結構
+- **THEN** 自動建立目錄結構：`system/`、`stores/`、`users/`、`linebot/`
+
+#### Scenario: 使用者資料目錄
+- **WHEN** 建立新使用者
+- **THEN** 建立 `users/{line_user_id}/` 目錄
+- **AND** 建立 `profile.json`
+- **AND** 按需建立 `chat_history/` 目錄（有對話時）
 
 ### Requirement: JSON 資料格式
 系統 SHALL 使用 JSON 格式儲存所有結構化資料，使用 UTF-8 編碼與 2 空格縮排。
@@ -29,32 +38,27 @@ TBD - created by archiving change add-data-architecture. Update Purpose after ar
 - **THEN** 將 dict 序列化為格式化 JSON 並寫入
 
 ### Requirement: 今日店家資料格式
-系統 SHALL 統一使用 `stores[]` 陣列格式儲存今日店家，不再維護冗餘的頂層欄位。
+系統 SHALL 統一使用 `stores[]` 陣列格式儲存今日店家。
 
 #### Scenario: 儲存今日店家
 - **GIVEN** 管理員設定今日店家
 - **WHEN** 系統儲存至 `system/today.json`
-- **THEN** 只使用 `stores[]` 陣列儲存
-- **AND** 不設定頂層 `store_id` 和 `store_name`
+- **THEN** 使用 `stores[]` 陣列儲存
 
 #### Scenario: 讀取今日店家
 - **GIVEN** 系統讀取 `system/today.json`
 - **WHEN** 處理店家資訊
 - **THEN** 直接使用 `stores[]` 陣列
-- **AND** 不需要檢查頂層欄位
 
-### Requirement: 訂單檔案格式
-系統 SHALL 統一使用 `{date}-{timestamp}.json` 格式儲存使用者訂單。
+### Requirement: 群組訂單儲存
+系統 SHALL 將群組訂單儲存在群組 session 檔案中。
 
-#### Scenario: 儲存訂單
-- **GIVEN** 使用者建立訂單
-- **WHEN** 系統儲存訂單
-- **THEN** 使用 `{date}-{timestamp}.json` 格式命名
-- **AND** 不使用舊的 `{date}.json` 格式
+#### Scenario: 儲存群組訂單
+- **GIVEN** 使用者在群組中點餐
+- **WHEN** 建立訂單
+- **THEN** 訂單存在 `linebot/sessions/{group_id}.json` 的 `orders` 陣列中
 
-#### Scenario: 讀取訂單
-- **GIVEN** 系統讀取使用者訂單
-- **WHEN** 搜尋訂單檔案
-- **THEN** 只匹配 `{date}-*.json` 模式
-- **AND** 不檢查 `{date}.json` 舊格式
-
+#### Scenario: 付款追蹤
+- **GIVEN** 群組有訂單
+- **WHEN** 追蹤付款狀態
+- **THEN** 付款記錄存在 `linebot/sessions/{group_id}.json` 的 `payments` 物件中

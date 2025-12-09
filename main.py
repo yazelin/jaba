@@ -207,7 +207,7 @@ async def chat(request: Request):
             menu_text = _get_today_menu_summary()
 
             return {
-                "message": f"🍱 開始群組點餐！\n\n{menu_text}\n\n直接說出餐點即可，說「收單」結束點餐。",
+                "message": f"🍱 開始群組點餐！\n\n{menu_text}\n\n直接說出餐點即可，說「收單」或「結單」結束點餐。",
                 "session_action": "started"
             }
 
@@ -219,7 +219,7 @@ async def chat(request: Request):
                 "session_action": None
             }
 
-        if message_lower == "收單":
+        if message_lower in ["收單", "結單"]:
             if not is_group_ordering(group_id):
                 return {
                     "message": "⚠️ 目前沒有進行中的點餐。\n\n說「開單」開始群組點餐。",
@@ -690,8 +690,11 @@ def _get_today_menu_summary() -> str:
             if not items:
                 continue
 
-            # 簡潔列出品項和價格
-            item_strs = []
+            # 分類標題
+            if cat_name:
+                lines.append(f"▸ {cat_name}")
+
+            # 每個品項一行
             for item in items:
                 name = item.get("name")
                 price = item.get("price")
@@ -700,16 +703,11 @@ def _get_today_menu_summary() -> str:
                 if variants:
                     # 有尺寸變體（如 M/L）
                     var_strs = [f"{v.get('size', '')}${v.get('price', 0)}" for v in variants]
-                    item_strs.append(f"{name}（{'/'.join(var_strs)}）")
+                    lines.append(f"  {name} {'/'.join(var_strs)}")
                 elif price:
-                    item_strs.append(f"{name} ${price}")
+                    lines.append(f"  {name} ${price}")
                 else:
-                    item_strs.append(name)
-
-            if cat_name:
-                lines.append(f"• {cat_name}：{', '.join(item_strs)}")
-            else:
-                lines.append(f"• {', '.join(item_strs)}")
+                    lines.append(f"  {name}")
 
     return "\n".join(lines) if len(lines) > 1 else ""
 

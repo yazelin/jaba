@@ -189,7 +189,7 @@ async def chat(request: Request):
 
     if group_id:
         # 檢查是否為開始/結束點餐指令
-        if message == "開始點餐":
+        if message == "開單":
             if is_group_ordering(group_id):
                 return {
                     "message": "⚠️ 此群組已經在點餐中了！\n\n直接說出你要點的餐點即可。",
@@ -202,15 +202,27 @@ async def chat(request: Request):
             })
             # 清空群組對話歷史（確保對話是這次點餐的內容）
             data.clear_group_chat_history(group_id)
+
+            # 取得今日菜單摘要
+            menu_text = _get_today_menu_summary()
+
             return {
-                "message": f"🍱 開始群組點餐！\n\n現在可以直接說出你要點的餐點，不需要 @呷爸。\n\n點餐完成後說「結束點餐」或「收單」即可。",
+                "message": f"🍱 開始群組點餐！\n\n{menu_text}\n\n直接說出餐點即可，說「收單」結束點餐。",
                 "session_action": "started"
             }
 
-        if message_lower in ["結束點餐", "收單"]:
+        # 查詢菜單（群組點餐中或未點餐都可以查）
+        if message == "菜單":
+            menu_text = _get_today_menu_summary()
+            return {
+                "message": menu_text if menu_text else "今日尚未設定店家菜單",
+                "session_action": None
+            }
+
+        if message_lower == "收單":
             if not is_group_ordering(group_id):
                 return {
-                    "message": "⚠️ 目前沒有進行中的點餐。",
+                    "message": "⚠️ 目前沒有進行中的點餐。\n\n說「開單」開始群組點餐。",
                     "session_action": None
                 }
             # 結束群組點餐並產生摘要
@@ -647,6 +659,61 @@ def add_order_to_session(group_id: str, username: str, order: dict) -> bool:
     return True
 
 
+def _get_today_menu_summary() -> str:
+    """取得今日菜單摘要（簡潔格式，供群組點餐使用）
+
+    Returns:
+        格式化的菜單摘要文字
+    """
+    today_info = data.get_today_info()
+    today_stores = today_info.get("stores", [])
+
+    if not today_stores:
+        return ""
+
+    lines = ["📋 今日菜單"]
+
+    for store_ref in today_stores:
+        store_id = store_ref.get("store_id")
+        store_name = store_ref.get("store_name", store_id)
+        menu = data.get_menu(store_id)
+
+        if not menu:
+            continue
+
+        lines.append(f"\n【{store_name}】")
+
+        for cat in menu.get("categories", []):
+            cat_name = cat.get("name", "")
+            items = cat.get("items", [])
+
+            if not items:
+                continue
+
+            # 簡潔列出品項和價格
+            item_strs = []
+            for item in items:
+                name = item.get("name")
+                price = item.get("price")
+                variants = item.get("variants", [])
+
+                if variants:
+                    # 有尺寸變體（如 M/L）
+                    var_strs = [f"{v.get('size', '')}${v.get('price', 0)}" for v in variants]
+                    item_strs.append(f"{name}（{'/'.join(var_strs)}）")
+                elif price:
+                    item_strs.append(f"{name} ${price}")
+                else:
+                    item_strs.append(name)
+
+            if cat_name:
+                lines.append(f"• {cat_name}：{', '.join(item_strs)}")
+            else:
+                lines.append(f"• {', '.join(item_strs)}")
+
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def generate_session_summary(session: dict) -> str:
     """產生群組點餐摘要
 
@@ -684,13 +751,23 @@ def generate_session_summary(session: dict) -> str:
                 name = item.get("name")
                 qty = item.get("quantity", 1)
                 subtotal = item.get("subtotal", 0)
-                user_items.append(f"  • {name} x{qty} ${subtotal}")
+                note = item.get("note", "")
+
+                # 組合品項顯示（包含備註）
+                item_text = f"  • {name}"
+                if note:
+                    item_text += f"（{note}）"
+                if qty > 1:
+                    item_text += f" x{qty}"
+                item_text += f" ${subtotal}"
+                user_items.append(item_text)
                 user_total += subtotal
 
-                # 統計總品項
-                if name not in item_counts:
-                    item_counts[name] = 0
-                item_counts[name] += qty
+                # 統計總品項（包含備註作為區分）
+                item_key = f"{name}（{note}）" if note else name
+                if item_key not in item_counts:
+                    item_counts[item_key] = 0
+                item_counts[item_key] += qty
 
         lines.append(f"👤 {username}（${user_total}）")
         lines.extend(user_items)

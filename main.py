@@ -512,31 +512,38 @@ async def linebot_register(request: Request):
     id_type = body.get("type")  # "user" 或 "group"
     id_value = body.get("id")
     name = body.get("name", "")
+    activated_by = body.get("activated_by", {})  # 啟用者資訊
 
     if not id_type or not id_value:
         return JSONResponse({"error": "缺少 type 或 id"}, status_code=400)
 
     whitelist = get_linebot_whitelist()
 
+    # 建立基本資料
+    entry = {
+        "id": id_value,
+        "name": name,
+        "registered_at": datetime.now().isoformat()
+    }
+
+    # 如果有啟用者資訊，加入記錄
+    if activated_by and activated_by.get("user_id"):
+        entry["activated_by"] = {
+            "user_id": activated_by.get("user_id", ""),
+            "display_name": activated_by.get("display_name", "")
+        }
+
     if id_type == "user":
         # 檢查是否已註冊
         existing = next((u for u in whitelist["users"] if u["id"] == id_value), None)
         if existing:
             return {"success": True, "message": "已經註冊過了", "already_registered": True}
-        whitelist["users"].append({
-            "id": id_value,
-            "name": name,
-            "registered_at": datetime.now().isoformat()
-        })
+        whitelist["users"].append(entry)
     elif id_type == "group":
         existing = next((g for g in whitelist["groups"] if g["id"] == id_value), None)
         if existing:
             return {"success": True, "message": "此群組已經註冊過了", "already_registered": True}
-        whitelist["groups"].append({
-            "id": id_value,
-            "name": name,
-            "registered_at": datetime.now().isoformat()
-        })
+        whitelist["groups"].append(entry)
     else:
         return JSONResponse({"error": "type 必須是 user 或 group"}, status_code=400)
 

@@ -1188,6 +1188,9 @@
           loadAllStores();
           loadGroups();  // 載入群組列表
 
+          // 清空聊天訊息（避免重複登入時累積訊息）
+          document.getElementById('chat-messages').innerHTML = '';
+
           // 顯示歡迎訊息（使用偏好稱呼）
           const displayName = preferredName || '我們';
           addMessage('assistant', `哇係呷爸，${displayName}今天要訂哪家店呢？

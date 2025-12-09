@@ -656,6 +656,31 @@
       }
 
       select.innerHTML = html;
+
+      // 確保選中狀態被正確恢復
+      if (selectedGroupId) {
+        select.value = selectedGroupId;
+      }
+    }
+
+    // 重新載入當前選中群組的訂單（不改變選中狀態）
+    async function reloadCurrentGroupOrders() {
+      if (!selectedGroupId) return;
+
+      // 載入群組對話
+      loadGroupChat(selectedGroupId);
+
+      try {
+        const res = await fetch(`/api/super-admin/groups/${selectedGroupId}/orders`);
+        const data = await res.json();
+        currentGroupOrders = data;
+        renderGroupOrders(data);
+        renderPayments(data);
+        renderStats(data);
+        document.getElementById('proxy-order-btn').style.display = 'block';
+      } catch (err) {
+        console.error('重新載入群組訂單失敗:', err);
+      }
     }
 
     async function loadGroupOrders() {
@@ -1375,29 +1400,28 @@
     });
 
     // === 群組點餐事件 ===
-    socket.on('group_session_started', (data) => {
-      // 重新載入群組列表
-      loadGroups();
+    socket.on('group_session_started', async (data) => {
+      // 重新載入群組列表（保持選中狀態）
+      await loadGroups();
       showNotification(`群組點餐已開始（${data.started_by || ''}）`);
     });
 
-    socket.on('group_order_updated', (data) => {
+    socket.on('group_order_updated', async (data) => {
       // 如果是當前選中的群組，重新載入訂單
-      const currentGroupId = document.getElementById('group-selector')?.value;
-      if (currentGroupId === data.group_id) {
-        loadGroupOrders(data.group_id);
+      if (selectedGroupId === data.group_id) {
+        await reloadCurrentGroupOrders();
       }
-      // 也更新群組列表（訂單數量可能變了）
-      loadGroups();
+      // 更新群組列表（訂單數量可能變了，但保持選中狀態）
+      await loadGroups();
       showNotification(`${data.user || '使用者'} 更新了訂單`);
     });
 
-    socket.on('group_session_ended', (data) => {
-      // 重新載入群組列表和訂單
-      loadGroups();
-      const currentGroupId = document.getElementById('group-selector')?.value;
-      if (currentGroupId === data.group_id) {
-        loadGroupOrders(data.group_id);
+    socket.on('group_session_ended', async (data) => {
+      // 重新載入群組列表（保持選中狀態）
+      await loadGroups();
+      // 如果是當前選中的群組，重新載入訂單
+      if (selectedGroupId === data.group_id) {
+        await reloadCurrentGroupOrders();
       }
       showNotification(`群組點餐已結束（${data.order_count || 0} 筆訂單，$${data.total_amount || 0}）`);
     });

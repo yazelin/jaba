@@ -89,11 +89,16 @@ body::before {
 
 .board-right .buttons {
   margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
 }
 
 .board-right .buttons .btn {
   padding: 12px 25px;
   font-size: 1em;
+  flex-shrink: 0;
 }
 
 /* 看板頁 RWD */
@@ -230,13 +235,14 @@ body::before {
 
 /* QRCode 區塊 */
 .qrcode-section {
-  text-align: center;
-  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .qrcode-image {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
@@ -244,7 +250,8 @@ body::before {
 .qrcode-hint {
   font-size: 0.85em;
   color: #666;
-  margin-top: 8px;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .store-name-item {

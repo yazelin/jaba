@@ -205,6 +205,12 @@ async def chat(request: Request):
             # 清空群組對話歷史（確保對話是這次點餐的內容）
             data.clear_group_chat_history(group_id)
 
+            # 廣播群組點餐開始事件
+            await broadcast_event("group_session_started", {
+                "group_id": group_id,
+                "started_by": display_name or username
+            })
+
             # 取得今日菜單摘要
             menu_text = _get_today_menu_summary()
 
@@ -230,6 +236,14 @@ async def chat(request: Request):
             # 結束群組點餐並產生摘要
             session = end_group_session(group_id)
             summary_text = generate_session_summary(session)
+
+            # 廣播群組點餐結束事件
+            await broadcast_event("group_session_ended", {
+                "group_id": group_id,
+                "order_count": len(session.get("orders", [])),
+                "total_amount": sum(o.get("total", 0) for o in session.get("orders", []))
+            })
+
             return {
                 "message": f"✅ 點餐結束！\n\n{summary_text}",
                 "session_action": "ended"
@@ -272,8 +286,21 @@ async def chat(request: Request):
             display_name if group_ordering else None
         )
 
-        # 廣播每個動作的事件（僅個人模式）
-        if not group_ordering:
+        # 廣播每個動作的事件
+        if group_ordering:
+            # 群組模式：廣播訂單更新事件
+            for result in action_results:
+                if result.get("success"):
+                    session = get_group_session(group_id)
+                    await broadcast_event("group_order_updated", {
+                        "group_id": group_id,
+                        "user": display_name or username,
+                        "order_count": len(session.get("orders", [])) if session else 0,
+                        "total_amount": sum(o.get("total", 0) for o in session.get("orders", [])) if session else 0
+                    })
+                    break  # 只發送一次事件
+        else:
+            # 個人模式：廣播各類事件
             for result in action_results:
                 if result.get("success") and result.get("event"):
                     event_type = result["event"]

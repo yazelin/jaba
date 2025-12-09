@@ -1371,6 +1371,34 @@
       showNotification('付款狀態已更新');
     });
 
+    // === 群組點餐事件 ===
+    socket.on('group_session_started', (data) => {
+      // 重新載入群組列表
+      loadGroups();
+      showNotification(`群組點餐已開始（${data.started_by || ''}）`);
+    });
+
+    socket.on('group_order_updated', (data) => {
+      // 如果是當前選中的群組，重新載入訂單
+      const currentGroupId = document.getElementById('group-selector')?.value;
+      if (currentGroupId === data.group_id) {
+        loadGroupOrders(data.group_id);
+      }
+      // 也更新群組列表（訂單數量可能變了）
+      loadGroups();
+      showNotification(`${data.user || '使用者'} 更新了訂單`);
+    });
+
+    socket.on('group_session_ended', (data) => {
+      // 重新載入群組列表和訂單
+      loadGroups();
+      const currentGroupId = document.getElementById('group-selector')?.value;
+      if (currentGroupId === data.group_id) {
+        loadGroupOrders(data.group_id);
+      }
+      showNotification(`群組點餐已結束（${data.order_count || 0} 筆訂單，$${data.total_amount || 0}）`);
+    });
+
     // === 確認對話框 ===
     let confirmModalResolve = null;
 

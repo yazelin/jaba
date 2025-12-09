@@ -488,6 +488,106 @@ async def upload_image(store_id: str, file: UploadFile = File(...)):
     return {"success": True, "path": f"images/{file.filename}"}
 
 
+# === LINE Bot 白名單 API ===
+
+def get_linebot_whitelist() -> dict:
+    """取得 LINE Bot 白名單"""
+    whitelist_file = data.DATA_DIR / "linebot" / "whitelist.json"
+    if whitelist_file.exists():
+        return data.read_json(whitelist_file)
+    return {"users": [], "groups": []}
+
+
+def save_linebot_whitelist(whitelist: dict):
+    """儲存 LINE Bot 白名單"""
+    linebot_dir = data.DATA_DIR / "linebot"
+    linebot_dir.mkdir(parents=True, exist_ok=True)
+    data.write_json(linebot_dir / "whitelist.json", whitelist)
+
+
+@app.post("/api/linebot/register")
+async def linebot_register(request: Request):
+    """註冊 LINE Bot 使用者或群組"""
+    body = await request.json()
+    id_type = body.get("type")  # "user" 或 "group"
+    id_value = body.get("id")
+    name = body.get("name", "")
+
+    if not id_type or not id_value:
+        return JSONResponse({"error": "缺少 type 或 id"}, status_code=400)
+
+    whitelist = get_linebot_whitelist()
+
+    if id_type == "user":
+        # 檢查是否已註冊
+        existing = next((u for u in whitelist["users"] if u["id"] == id_value), None)
+        if existing:
+            return {"success": True, "message": "已經註冊過了", "already_registered": True}
+        whitelist["users"].append({
+            "id": id_value,
+            "name": name,
+            "registered_at": datetime.now().isoformat()
+        })
+    elif id_type == "group":
+        existing = next((g for g in whitelist["groups"] if g["id"] == id_value), None)
+        if existing:
+            return {"success": True, "message": "此群組已經註冊過了", "already_registered": True}
+        whitelist["groups"].append({
+            "id": id_value,
+            "name": name,
+            "registered_at": datetime.now().isoformat()
+        })
+    else:
+        return JSONResponse({"error": "type 必須是 user 或 group"}, status_code=400)
+
+    save_linebot_whitelist(whitelist)
+    return {"success": True, "message": "註冊成功"}
+
+
+@app.get("/api/linebot/whitelist")
+async def linebot_get_whitelist():
+    """取得白名單"""
+    return get_linebot_whitelist()
+
+
+@app.get("/api/linebot/check/{id_value}")
+async def linebot_check(id_value: str):
+    """檢查是否在白名單中"""
+    whitelist = get_linebot_whitelist()
+
+    # 檢查使用者
+    for user in whitelist["users"]:
+        if user["id"] == id_value:
+            return {"registered": True, "type": "user", "name": user.get("name")}
+
+    # 檢查群組
+    for group in whitelist["groups"]:
+        if group["id"] == id_value:
+            return {"registered": True, "type": "group", "name": group.get("name")}
+
+    return {"registered": False}
+
+
+@app.delete("/api/linebot/unregister")
+async def linebot_unregister(request: Request):
+    """取消註冊"""
+    body = await request.json()
+    id_value = body.get("id")
+
+    if not id_value:
+        return JSONResponse({"error": "缺少 id"}, status_code=400)
+
+    whitelist = get_linebot_whitelist()
+
+    # 從使用者列表移除
+    whitelist["users"] = [u for u in whitelist["users"] if u["id"] != id_value]
+    # 從群組列表移除
+    whitelist["groups"] = [g for g in whitelist["groups"] if g["id"] != id_value]
+
+    save_linebot_whitelist(whitelist)
+    return {"success": True, "message": "已取消註冊"}
+
+
 # === 啟動應用 ===
 
 if __name__ == "__main__":

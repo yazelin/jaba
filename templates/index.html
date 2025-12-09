@@ -224,36 +224,30 @@
       setTimeout(() => notif.remove(), 3000);
     }
 
-    // 監聽即時事件
-    socket.on('order_created', (data) => {
-      showNotification(`${data.username} 訂了便當！`);
-      sendBrowserNotification('新訂單', `${data.username} 訂了便當！`, 'order-created');
-      loadData();
+    // 監聽即時事件（群組訂單）
+    socket.on('group_session_started', (data) => {
+      showNotification(`${data.started_by || '有人'} 開始點餐！`);
+      sendBrowserNotification('開始點餐', `${data.started_by || '有人'} 開始點餐！`, 'group-session-started');
+      loadGroupOrders();
     });
 
-    socket.on('order_updated', (data) => {
-      showNotification(`${data.username} 修改了訂單`);
-      sendBrowserNotification('訂單更新', `${data.username} 修改了訂單`, 'order-updated');
-      loadData();
+    socket.on('group_order_updated', (data) => {
+      showNotification(`${data.user || '有人'} 點了餐！`);
+      sendBrowserNotification('新訂單', `${data.user || '有人'} 點了餐！`, 'group-order-updated');
+      loadGroupOrders();
     });
 
-    socket.on('order_cancelled', (data) => {
-      showNotification(`${data.username} 取消了訂單`);
-      sendBrowserNotification('訂單取消', `${data.username} 取消了訂單`, 'order-cancelled');
-      loadData();
-    });
-
-    socket.on('orders_cleared', (data) => {
-      showNotification('管理員已清除所有訂單');
-      sendBrowserNotification('訂單清除', '管理員已清除所有訂單', 'orders-cleared');
-      loadData();
+    socket.on('group_session_ended', (data) => {
+      showNotification(`點餐結束，共 ${data.order_count || 0} 筆訂單`);
+      sendBrowserNotification('點餐結束', `共 ${data.order_count || 0} 筆訂單`, 'group-session-ended');
+      loadGroupOrders();
     });
 
     socket.on('store_changed', (data) => {
       const storeName = data.store_name || '新店家';
       showNotification(`今日店家已更新：${storeName}`);
       sendBrowserNotification('店家更新', `今日店家已更新：${storeName}`, 'store-changed');
-      loadData();
+      loadStoreData();
     });
 
     // === 美食評論區（顯示所有群組對話）===

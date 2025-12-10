@@ -7,7 +7,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: url('/static/images/jaba-bg.png') center center / cover no-repeat fixed;
+  background: url('/static/images/jaba-bg-sm.jpg') center center / cover no-repeat fixed;
   min-height: 100vh;
   color: #4E342E;
 }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>呷爸 - 管理員</title>
-  <link rel="icon" type="image/png" href="/static/images/jaba.png">
+  <link rel="icon" type="image/png" href="/static/images/jaba-sm.png">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
@@ -58,7 +58,7 @@
       <div class="chat-container">
         <div class="chat-header">
           <a href="/" class="back-link">← 返回</a>
-          <h1><img src="/static/images/jaba.png" alt="呷爸" class="logo-icon"> 呷爸管理模式</h1>
+          <h1><img src="/static/images/jaba-sm.png" alt="呷爸" class="logo-icon"> 呷爸管理模式</h1>
           <div class="header-spacer"></div>
         </div>
 
@@ -177,7 +177,7 @@
         <!-- 步驟 2：辨識中 -->
         <div id="recognizing-step" class="upload-step" style="display: none;">
           <div class="loading-jaba">
-            <img src="/static/images/jaba-keyin.png" alt="呷爸" class="loading-jaba-icon">
+            <img src="/static/images/jaba-keyin-sm.png" alt="呷爸" class="loading-jaba-icon">
             <div class="loading-spinner-ring"></div>
           </div>
           <div class="loading-text">呷爸正在努力 key 菜單...</div>
@@ -313,7 +313,7 @@
       if ('Notification' in window && Notification.permission === 'granted') {
         const options = {
           body: body,
-          icon: '/static/images/jaba.png',
+          icon: '/static/images/jaba-sm.png',
           tag: tag || `jaba-${Date.now()}`,
           requireInteraction: false
         };
@@ -1204,7 +1204,7 @@
       if (role === 'assistant') {
         msgEl.innerHTML = `
           <div class="message-avatar">
-            <img src="/static/images/jaba-icon.png" alt="呷爸" class="avatar-icon">
+            <img src="/static/images/jaba-icon-sm.png" alt="呷爸" class="avatar-icon">
           </div>
           <div class="message-content">${content.replace(/\n/g, '<br>')}</div>
         `;

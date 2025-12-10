@@ -2058,7 +2058,6 @@
     }
 
     // === LINE Bot 狀態檢查 ===
-    const LINEBOT_URL = 'https://jaba-line-bot.onrender.com';
     const LINEBOT_CHECK_INTERVAL = 60000; // 60 秒
     let linebotCheckTimer = null;
 
@@ -2075,17 +2074,17 @@
       textEl.textContent = '檢查中...';
 
       try {
-        const res = await fetch(LINEBOT_URL, { mode: 'cors' });
-        const text = await res.text();
+        const res = await fetch('/api/linebot-status');
+        const data = await res.json();
 
-        if (text.includes('Jaba LINE Bot is running!')) {
+        if (data.status === 'online') {
           statusEl.className = 'linebot-status-large online';
           iconEl.textContent = '🟢';
-          textEl.textContent = 'LINE Bot 運行中';
+          textEl.textContent = data.message;
         } else {
           statusEl.className = 'linebot-status-large offline';
           iconEl.textContent = '🔴';
-          textEl.textContent = 'LINE Bot 異常';
+          textEl.textContent = data.message;
         }
       } catch (err) {
         console.error('LINE Bot 狀態檢查失敗:', err);

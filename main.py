@@ -1,5 +1,6 @@
 """jaba (呷爸) - AI 午餐訂便當系統"""
 import socketio
+import httpx
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -54,6 +55,22 @@ async def index():
 async def manager_page():
     """管理頁"""
     return Path("templates/manager.html").read_text(encoding="utf-8")
+
+
+@app.get("/api/linebot-status")
+async def get_linebot_status():
+    """檢查 LINE Bot 運行狀態（代理請求避免 CORS）"""
+    LINEBOT_URL = "https://jaba-line-bot.onrender.com"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.get(LINEBOT_URL)
+            text = res.text
+            if "Jaba LINE Bot is running!" in text:
+                return {"status": "online", "message": "LINE Bot 運行中"}
+            else:
+                return {"status": "error", "message": "LINE Bot 異常"}
+    except Exception as e:
+        return {"status": "offline", "message": "LINE Bot 離線"}
 
 
 @app.get("/api/today")

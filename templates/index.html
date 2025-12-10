@@ -41,6 +41,10 @@
             <div class="qrcode-info">
               <p class="qrcode-title">加入呷爸好友</p>
               <p class="qrcode-hint">掃碼加入 LINE 群組點餐</p>
+              <p class="linebot-status" id="linebot-status">
+                <span class="linebot-status-icon">🔄</span>
+                <span class="linebot-status-text">LINE Bot 檢查中...</span>
+              </p>
             </div>
           </div>
         </div>
@@ -335,12 +339,51 @@
       addBoardChatMessage(msg);
     });
 
+    // === LINE Bot 狀態檢查 ===
+    const LINEBOT_URL = 'https://jaba-line-bot.onrender.com';
+    const LINEBOT_CHECK_INTERVAL = 60000; // 60 秒
+
+    async function checkLineBotStatus() {
+      const statusEl = document.getElementById('linebot-status');
+      const iconEl = statusEl.querySelector('.linebot-status-icon');
+      const textEl = statusEl.querySelector('.linebot-status-text');
+
+      // 顯示檢查中狀態
+      statusEl.className = 'linebot-status checking';
+      iconEl.textContent = '🔄';
+      textEl.textContent = 'LINE Bot 檢查中...';
+
+      try {
+        const res = await fetch(LINEBOT_URL, { mode: 'cors' });
+        const text = await res.text();
+
+        if (text.includes('Jaba LINE Bot is running!')) {
+          statusEl.className = 'linebot-status online';
+          iconEl.textContent = '🟢';
+          textEl.textContent = 'LINE Bot 運行中';
+        } else {
+          statusEl.className = 'linebot-status offline';
+          iconEl.textContent = '🔴';
+          textEl.textContent = 'LINE Bot 異常';
+        }
+      } catch (err) {
+        console.error('LINE Bot 狀態檢查失敗:', err);
+        statusEl.className = 'linebot-status offline';
+        iconEl.textContent = '🔴';
+        textEl.textContent = 'LINE Bot 離線';
+      }
+    }
+
     // 初始載入
     loadData();
     loadBoardChat();
+    checkLineBotStatus();
 
-    // 每 30 秒自動刷新
+    // 每 30 秒自動刷新資料
     setInterval(loadData, 30000);
+
+    // 每 60 秒檢查 LINE Bot 狀態
+    setInterval(checkLineBotStatus, LINEBOT_CHECK_INTERVAL);
   </script>
 </body>
 </html>

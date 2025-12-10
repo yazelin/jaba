@@ -24,8 +24,22 @@
   <!-- 管理介面 -->
   <div class="container admin-container" id="manager-section" style="display: none;">
     <div class="admin-three-columns">
-      <!-- 左側：店家管理 -->
+      <!-- 左側：LINE Bot 狀態 + 店家管理 -->
       <div class="admin-left-panel">
+        <!-- LINE Bot 狀態 Panel -->
+        <div class="panel-card linebot-panel">
+          <div class="panel-header">
+            <span>🤖</span>
+            <span>LINE Bot 狀態</span>
+          </div>
+          <div class="panel-content linebot-panel-content" id="linebot-panel-content">
+            <div class="linebot-status-large" id="linebot-status">
+              <span class="linebot-status-icon">🔄</span>
+              <span class="linebot-status-text">檢查中...</span>
+            </div>
+          </div>
+        </div>
+
         <div class="panel-card stores-panel">
           <div class="panel-header">
             <span>🏬</span>
@@ -1062,6 +1076,7 @@
           const preferredName = await loadAdminData(username);
           loadAllStores();
           loadGroups();  // 載入群組列表
+          startLineBotCheck();  // 開始 LINE Bot 狀態檢查
 
           // 清空聊天訊息（避免重複登入時累積訊息）
           document.getElementById('chat-messages').innerHTML = '';
@@ -2040,6 +2055,49 @@
         console.error('儲存失敗:', err);
         alert('儲存失敗：' + err.message);
       }
+    }
+
+    // === LINE Bot 狀態檢查 ===
+    const LINEBOT_URL = 'https://jaba-line-bot.onrender.com';
+    const LINEBOT_CHECK_INTERVAL = 60000; // 60 秒
+    let linebotCheckTimer = null;
+
+    async function checkLineBotStatus() {
+      const statusEl = document.getElementById('linebot-status');
+      if (!statusEl) return;
+
+      const iconEl = statusEl.querySelector('.linebot-status-icon');
+      const textEl = statusEl.querySelector('.linebot-status-text');
+
+      // 顯示檢查中狀態
+      statusEl.className = 'linebot-status-large checking';
+      iconEl.textContent = '🔄';
+      textEl.textContent = '檢查中...';
+
+      try {
+        const res = await fetch(LINEBOT_URL, { mode: 'cors' });
+        const text = await res.text();
+
+        if (text.includes('Jaba LINE Bot is running!')) {
+          statusEl.className = 'linebot-status-large online';
+          iconEl.textContent = '🟢';
+          textEl.textContent = 'LINE Bot 運行中';
+        } else {
+          statusEl.className = 'linebot-status-large offline';
+          iconEl.textContent = '🔴';
+          textEl.textContent = 'LINE Bot 異常';
+        }
+      } catch (err) {
+        console.error('LINE Bot 狀態檢查失敗:', err);
+        statusEl.className = 'linebot-status-large offline';
+        iconEl.textContent = '🔴';
+        textEl.textContent = 'LINE Bot 離線';
+      }
+    }
+
+    function startLineBotCheck() {
+      checkLineBotStatus();
+      linebotCheckTimer = setInterval(checkLineBotStatus, LINEBOT_CHECK_INTERVAL);
     }
   </script>
 </body>

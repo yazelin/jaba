@@ -265,6 +265,41 @@ body::before {
   margin: 0;
 }
 
+/* LINE Bot 狀態指示器（看板頁 QRCode 區塊內） */
+.linebot-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  margin: 8px 0 0 0;
+  padding: 4px 8px;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.linebot-status.checking {
+  color: #666;
+  background: #f5f5f5;
+}
+
+.linebot-status.online {
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+
+.linebot-status.offline {
+  color: #c62828;
+  background: #ffebee;
+}
+
+.linebot-status-icon {
+  font-size: 1em;
+}
+
+.linebot-status-text {
+  font-weight: 500;
+}
+
 .store-name-item {
   font-size: 1em;
   color: #5D4037;
@@ -2709,4 +2744,49 @@ body::before {
 /* 代理點餐按鈕放在標題旁 */
 .panel-header .btn-sm {
   margin-left: auto;
+}
+
+/* === LINE Bot 狀態 Panel（管理員頁） === */
+.linebot-panel {
+  flex-shrink: 0;
+}
+
+.linebot-panel-content {
+  padding: 15px;
+  max-height: none;
+}
+
+.linebot-status-large {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 1.1em;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.linebot-status-large.checking {
+  color: #666;
+  background: #f5f5f5;
+}
+
+.linebot-status-large.online {
+  color: #2e7d32;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+}
+
+.linebot-status-large.offline {
+  color: #c62828;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+}
+
+.linebot-status-large .linebot-status-icon {
+  font-size: 1.3em;
+}
+
+.linebot-status-large .linebot-status-text {
+  font-weight: 600;
 }

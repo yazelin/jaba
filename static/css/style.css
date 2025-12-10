@@ -1591,6 +1591,7 @@ body::before {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  gap: 15px;
 }
 
 .admin-left-panel .stores-panel {

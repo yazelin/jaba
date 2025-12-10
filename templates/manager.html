@@ -24,8 +24,21 @@
   <!-- 管理介面 -->
   <div class="container admin-container" id="manager-section" style="display: none;">
     <div class="admin-three-columns">
-      <!-- 左側：LINE Bot 狀態 + 店家管理 -->
+      <!-- 左側：店家管理 + LINE Bot 狀態 -->
       <div class="admin-left-panel">
+        <div class="panel-card stores-panel">
+          <div class="panel-header">
+            <span>🏬</span>
+            <span>店家管理</span>
+          </div>
+          <button class="menu-upload-btn" onclick="openMenuUpload()">
+            📷 上傳菜單
+          </button>
+          <div class="panel-content stores-panel-content" id="stores-content">
+            <div class="orders-empty">載入中...</div>
+          </div>
+        </div>
+
         <!-- LINE Bot 狀態 Panel -->
         <div class="panel-card linebot-panel">
           <div class="panel-header">
@@ -37,19 +50,6 @@
               <span class="linebot-status-icon">🔄</span>
               <span class="linebot-status-text">檢查中...</span>
             </div>
-          </div>
-        </div>
-
-        <div class="panel-card stores-panel">
-          <div class="panel-header">
-            <span>🏬</span>
-            <span>店家管理</span>
-          </div>
-          <button class="menu-upload-btn" onclick="openMenuUpload()">
-            📷 上傳菜單
-          </button>
-          <div class="panel-content stores-panel-content" id="stores-content">
-            <div class="orders-empty">載入中...</div>
           </div>
         </div>
       </div>

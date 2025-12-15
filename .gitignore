@@ -12,3 +12,4 @@ wheels/
 # Data files (except system config)
 data/*
 !data/system/
+.env

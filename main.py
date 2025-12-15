@@ -1,4 +1,7 @@
 """jaba (呷爸) - AI 午餐訂便當系統"""
+from dotenv import load_dotenv
+load_dotenv()  # 載入 .env 環境變數
+
 import socketio
 import httpx
 from fastapi import FastAPI, Request, UploadFile, File
@@ -9,6 +12,7 @@ from datetime import datetime
 
 from app import data
 from app import ai
+from app import linebot as lb
 
 # 建立 Socket.IO 伺服器
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -59,18 +63,328 @@ async def manager_page():
 
 @app.get("/api/linebot-status")
 async def get_linebot_status():
-    """檢查 LINE Bot 運行狀態（代理請求避免 CORS）"""
-    LINEBOT_URL = "https://jaba-line-bot.onrender.com"
+    """LINE Bot 狀態（整合模式 = jaba 自身狀態）"""
+    if lb.LINE_BOT_ENABLED:
+        return {"status": "online", "message": "LINE Bot 運行中（整合模式）"}
+    else:
+        return {"status": "disabled", "message": "LINE Bot 未設定（缺少環境變數）"}
+
+
+# === LINE Bot Webhook ===
+
+@app.post("/jaba/callback")
+async def line_callback(request: Request):
+    """LINE Webhook endpoint - 接收 LINE Platform 的訊息"""
+    if not lb.LINE_BOT_ENABLED:
+        return JSONResponse({"error": "LINE Bot 未設定"}, status_code=503)
+
+    signature = request.headers.get("X-Line-Signature", "")
+    body = await request.body()
+    body_text = body.decode("utf-8")
+
+    # 驗證簽章
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.get(LINEBOT_URL)
-            text = res.text
-            if "Jaba LINE Bot is running!" in text:
-                return {"status": "online", "message": "LINE Bot 運行中"}
-            else:
-                return {"status": "error", "message": "LINE Bot 異常"}
-    except Exception as e:
-        return {"status": "offline", "message": "LINE Bot 離線"}
+        lb.handler.handle(body_text, signature)
+    except Exception:
+        return JSONResponse({"error": "Invalid signature"}, status_code=400)
+
+    # 解析事件
+    import json
+    from linebot.v3.webhooks import MessageEvent, TextMessageContent, LeaveEvent, UnfollowEvent
+
+    try:
+        events_data = json.loads(body_text)
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    for event_data in events_data.get("events", []):
+        event_type = event_data.get("type")
+
+        if event_type == "message":
+            await _handle_line_message(event_data)
+        elif event_type == "leave":
+            await _handle_line_leave(event_data)
+        elif event_type == "unfollow":
+            await _handle_line_unfollow(event_data)
+
+    return "OK"
+
+
+async def _handle_line_message(event_data: dict):
+    """處理 LINE 文字訊息"""
+    message = event_data.get("message", {})
+    if message.get("type") != "text":
+        return
+
+    user_text = message.get("text", "")
+    if not user_text or not user_text.strip():
+        return
+
+    reply_token = event_data.get("replyToken")
+    source = event_data.get("source", {})
+    source_type = source.get("type", "user")
+    user_id = source.get("userId", "")
+    group_id = source.get("groupId")
+    room_id = source.get("roomId")
+
+    # 取得來源 ID
+    if source_type == "group":
+        source_id = group_id
+    elif source_type == "room":
+        source_id = room_id
+        source_type = "group"  # room 當作 group 處理
+    else:
+        source_id = user_id
+
+    # 檢查群組是否在點餐中
+    is_ordering = is_group_ordering(source_id) if source_type == "group" else False
+
+    # 判斷是否回應
+    should_reply, cleaned_message = lb.should_respond(source_type, user_text, is_ordering)
+    if not should_reply:
+        return
+
+    # 處理特殊指令
+    async def register_whitelist(id_type, id_value, name, activator_id, activator_name):
+        whitelist = get_linebot_whitelist()
+        entry = {
+            "id": id_value,
+            "name": name,
+            "registered_at": datetime.now().isoformat(),
+            "activated_by": {
+                "user_id": activator_id,
+                "display_name": activator_name
+            }
+        }
+
+        if id_type == "user":
+            existing = next((u for u in whitelist["users"] if u["id"] == id_value), None)
+            if existing:
+                if name and name != existing.get("name"):
+                    existing["name"] = name
+                    save_linebot_whitelist(whitelist)
+                return {"success": True, "already_registered": True}
+            whitelist["users"].append(entry)
+        else:
+            existing = next((g for g in whitelist["groups"] if g["id"] == id_value), None)
+            if existing:
+                if name and name != existing.get("name"):
+                    existing["name"] = name
+                    save_linebot_whitelist(whitelist)
+                return {"success": True, "already_registered": True}
+            whitelist["groups"].append(entry)
+
+        save_linebot_whitelist(whitelist)
+        return {"success": True}
+
+    def check_whitelist(id_value):
+        whitelist = get_linebot_whitelist()
+        for user in whitelist["users"]:
+            if user["id"] == id_value:
+                return {"registered": True, "type": "user"}
+        for group in whitelist["groups"]:
+            if group["id"] == id_value:
+                return {"registered": True, "type": "group"}
+        return {"registered": False}
+
+    special_response = await lb.handle_special_command(
+        cleaned_message, source_type, source_id, user_id, group_id, room_id,
+        check_whitelist, register_whitelist
+    )
+    if special_response:
+        await lb.reply_message(reply_token, special_response)
+        return
+
+    # 檢查白名單
+    whitelist_check = check_whitelist(source_id)
+    if not whitelist_check.get("registered"):
+        if source_type == "group":
+            await lb.reply_message(reply_token, "⚠️ 此群組尚未啟用點餐功能。")
+        else:
+            await lb.reply_message(reply_token, "⚠️ 你尚未啟用點餐功能。")
+        return
+
+    # 取得使用者名稱
+    username = await lb.get_user_display_name(source_type, user_id, group_id, room_id)
+
+    # 處理群組點餐指令（開單、菜單、收單等）
+    if source_type == "group":
+        message_lower = cleaned_message.strip().lower()
+
+        # 開單
+        if cleaned_message == "開單":
+            if is_group_ordering(source_id):
+                await lb.reply_message(reply_token, "⚠️ 此群組已經在點餐中了！\n\n直接說出你要點的餐點即可。")
+                return
+
+            # 開始群組點餐
+            start_group_session(source_id, {
+                "line_user_id": user_id,
+                "display_name": username
+            })
+            data.clear_group_chat_history(source_id)
+
+            await broadcast_event("group_session_started", {
+                "group_id": source_id,
+                "started_by": username
+            })
+
+            menu_text = _get_today_menu_summary()
+            await lb.reply_message(reply_token, f"🍱 開始群組點餐！\n\n{menu_text}\n\n直接說出餐點即可，說「收單」或「結單」結束點餐。")
+            return
+
+        # 菜單
+        if cleaned_message == "菜單":
+            menu_text = _get_today_menu_summary()
+            await lb.reply_message(reply_token, menu_text if menu_text else "今日尚未設定店家菜單")
+            return
+
+        # 收單/結單
+        if message_lower in ["收單", "結單"]:
+            if not is_group_ordering(source_id):
+                await lb.reply_message(reply_token, "⚠️ 目前沒有進行中的點餐。\n\n說「開單」開始群組點餐。")
+                return
+
+            session = end_group_session(source_id)
+            summary_text = generate_session_summary(session)
+
+            await broadcast_event("group_session_ended", {
+                "group_id": source_id,
+                "order_count": len(session.get("orders", [])),
+                "total_amount": sum(o.get("total", 0) for o in session.get("orders", []))
+            })
+
+            await lb.reply_message(reply_token, f"✅ 點餐結束！\n\n{summary_text}")
+            return
+
+        # 查詢目前訂單
+        if message_lower in ["目前訂單", "訂單", "查看訂單", "訂單狀況", "點了什麼"]:
+            if is_group_ordering(source_id):
+                session = get_group_session(source_id)
+                summary_text = generate_session_summary(session)
+                await lb.reply_message(reply_token, f"📋 目前點餐狀況\n\n{summary_text}")
+                return
+
+    # 判斷模式
+    personal_mode = source_type == "user"
+    group_ordering = source_type == "group" and is_ordering
+
+    # 取得群組名稱
+    group_name = None
+    if group_ordering:
+        whitelist = get_linebot_whitelist()
+        group_info = next((g for g in whitelist.get("groups", []) if g["id"] == source_id), None)
+        if group_info:
+            group_name = group_info.get("name") or f"群組 ...{source_id[-8:]}"
+
+    # 呼叫 AI
+    response = await ai.call_ai(
+        username, cleaned_message, False, group_ordering, source_id if group_ordering else None,
+        user_id if (group_ordering or personal_mode) else None,
+        username if (group_ordering or personal_mode) else None,
+        group_name if group_ordering else None,
+        personal_mode
+    )
+
+    # 廣播群組對話更新
+    if group_ordering and group_id and group_name:
+        ai_message = response.get("message", "")
+        await broadcast_event("board_chat_message", {
+            "group_name": group_name,
+            "username": username,
+            "role": "user",
+            "content": cleaned_message
+        })
+        await broadcast_event("group_chat_updated", {
+            "group_id": source_id,
+            "message": {"username": username, "role": "user", "content": cleaned_message}
+        })
+        if ai_message:
+            await broadcast_event("board_chat_message", {
+                "group_name": group_name,
+                "username": "呷爸",
+                "role": "assistant",
+                "content": ai_message
+            })
+            await broadcast_event("group_chat_updated", {
+                "group_id": source_id,
+                "message": {"username": "呷爸", "role": "assistant", "content": ai_message}
+            })
+
+    # 執行動作
+    actions = response.get("actions", [])
+    if actions:
+        ai.execute_actions(
+            username, actions, False,
+            source_id if group_ordering else None,
+            user_id if (group_ordering or personal_mode) else None,
+            username if (group_ordering or personal_mode) else None,
+            personal_mode
+        )
+
+        if group_ordering:
+            session = get_group_session(source_id)
+            await broadcast_event("group_order_updated", {
+                "group_id": source_id,
+                "user": username,
+                "order_count": len(session.get("orders", [])) if session else 0,
+                "total_amount": sum(o.get("total", 0) for o in session.get("orders", [])) if session else 0
+            })
+
+    # 回覆訊息
+    reply_text = response.get("message", "")
+    if reply_text and reply_text.strip():
+        # 群組點餐模式：附加點餐摘要
+        if group_ordering and actions:
+            session = get_group_session(source_id)
+            if session:
+                summary_text = generate_session_summary(session)
+                reply_text = f"{reply_text}\n\n───\n{summary_text}"
+        await lb.reply_message(reply_token, reply_text)
+
+
+async def _handle_line_leave(event_data: dict):
+    """處理 Bot 被移出群組事件"""
+    source = event_data.get("source", {})
+    source_type = source.get("type")
+
+    if source_type == "group":
+        group_id = source.get("groupId")
+        if group_id:
+            print(f"Bot 被移出群組: {group_id}")
+            await _unregister_from_whitelist(group_id)
+    elif source_type == "room":
+        room_id = source.get("roomId")
+        if room_id:
+            print(f"Bot 被移出聊天室: {room_id}")
+            await _unregister_from_whitelist(room_id)
+
+
+async def _handle_line_unfollow(event_data: dict):
+    """處理使用者封鎖事件"""
+    source = event_data.get("source", {})
+    user_id = source.get("userId")
+    if user_id:
+        print(f"使用者取消追蹤: {user_id}")
+        await _unregister_from_whitelist(user_id)
+
+
+async def _unregister_from_whitelist(id_value: str):
+    """從白名單移除"""
+    whitelist = get_linebot_whitelist()
+    whitelist["users"] = [u for u in whitelist["users"] if u["id"] != id_value]
+    whitelist["groups"] = [g for g in whitelist["groups"] if g["id"] != id_value]
+    save_linebot_whitelist(whitelist)
+
+    # 清除相關資料
+    sessions_dir = data.DATA_DIR / "linebot" / "sessions"
+    session_file = sessions_dir / f"{id_value}.json"
+    chat_file = sessions_dir / f"{id_value}-chat.json"
+
+    if session_file.exists():
+        session_file.unlink()
+    if chat_file.exists():
+        chat_file.unlink()
 
 
 @app.get("/api/today")

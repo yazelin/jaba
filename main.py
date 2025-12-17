@@ -1220,8 +1220,8 @@ def generate_session_summary(session: dict) -> str:
                 user_items.append(item_text)
                 user_total += subtotal
 
-                # 統計總品項（包含備註作為區分）
-                item_key = f"{name}（{note}）" if note else name
+                # 統計總品項（只以名稱統計，不含備註）
+                item_key = name
                 if item_key not in item_counts:
                     item_counts[item_key] = 0
                 item_counts[item_key] += qty

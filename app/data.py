@@ -13,7 +13,6 @@ def ensure_data_dirs():
         DATA_DIR / "system" / "prompts",
         DATA_DIR / "stores",
         DATA_DIR / "users",
-        DATA_DIR / "orders",
         DATA_DIR / "chat",
     ]
     for d in dirs:
